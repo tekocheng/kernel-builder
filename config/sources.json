@@ -28,7 +28,7 @@
       "vendor/debugfs.config",
       "vendor/infinity.config"
     ],
-    "toolchain": "llvm-23.1.1",
+    "toolchain": "llvm-23.1.5",
     "modules_src": "../sm8450-modules/qcom/opensource",
     "modules_list": "config/techpack-sm8450.txt",
     "extra": [
@@ -52,7 +52,17 @@
     "ref": "melt-rebase",
     "defconfig_mode": "single",
     "defconfig": "marble_defconfig",
-    "toolchain": "llvm-23.1.1",
+    "toolchain": "llvm-23.1.5",
     "notes": "Single-tree HyperOS kernel. Flash the Image on stock HyperOS only."
+  },
+    "bouquet": {
+    "display": "Bouquet",
+    "rom": "AOSP / LOS-based",
+    "fetch": "git",
+    "repo": "Pzqqt/android_kernel_xiaomi_marble",
+    "ref": "bouquet_ci",
+    "defconfig_mode": "single",
+    "defconfig": "marble_defconfig",
+    "toolchain": "llvm-23.1.5"
   }
 }
