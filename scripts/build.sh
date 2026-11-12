@@ -25,6 +25,8 @@ LTO="${LTO:-thin}"
 BUILD_SCOPE="${BUILD_SCOPE:-image-only}"
 USE_CCACHE="${USE_CCACHE:-true}"
 ALL_SOURCES="${ALL_SOURCES:-false}"
+# AOSP clang r596125 (Clang 22.0.2). android.googlesource.com main no longer carries this directory.
+ANDROID_CLANG_URL="${ANDROID_CLANG_URL:-https://github.com/Neebe3289/aosp-clang/releases/download/clang-22.0.2-15682573/clang-22.0.2-15682573.tar.gz}"
 
 SRC="${ROOT}/src"
 RELEASE="${ROOT}/release"
@@ -194,23 +196,14 @@ fetch_toolchain() {
     android-r596125)
       local bin="${ROOT}/android-clang/clang-r596125/bin"
       if [[ ! -x "${bin}/clang" ]]; then
-        local repo="${SRC}/clang-repo"
-        rm -rf "${repo}"
-        git clone --filter=blob:none --no-checkout --depth 1 \
-          -b main \
-          https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 \
-          "${repo}"
-        git -C "${repo}" sparse-checkout set --no-cone /clang-r596125
-        git -C "${repo}" checkout -q
-        mkdir -p "${ROOT}/android-clang"
+        local tarball="${SRC}/clang-r596125.tar.gz"
+        curl -fL --retry 3 -o "${tarball}" "${ANDROID_CLANG_URL}"
         rm -rf "${ROOT}/android-clang/clang-r596125"
-        local clang_path clang_root
-        clang_path="$(find "${repo}" -type f -path "*/bin/clang" -print -quit)"
-        [[ -n "${clang_path}" ]] || die "Could not find bin/clang in the downloaded android clang repo."
-        clang_root="$(dirname "$(dirname "${clang_path}")")"
-        mv "${clang_root}" "${ROOT}/android-clang/clang-r596125"
-        rm -rf "${repo}"
-        [[ -x "${bin}/clang" ]] || die "Downloaded android-r596125 toolchain is incomplete."
+        mkdir -p "${ROOT}/android-clang/clang-r596125"
+        # The tarball has no top-level directory: bin/, lib/ ... sit at the root.
+        tar -xzf "${tarball}" -C "${ROOT}/android-clang/clang-r596125"
+        rm -f "${tarball}"
+        [[ -x "${bin}/clang" ]] || die "bin/clang missing after extracting ${ANDROID_CLANG_URL}"
       fi
       TOOLCHAIN_BIN="${bin}"
       ;;
@@ -238,9 +231,7 @@ kconfig_path() {
   local candidate
   for candidate in \
     "${KERNEL_DIR}/KernelSU/kernel/Kconfig" \
-    "${KERNEL_DIR}/KernelSU-Next/kernel/Kconfig" \
-    "${KERNEL_DIR}/drivers/kernelsu/Kconfig" \
-    "${KERNEL_DIR}/common/drivers/kernelsu/Kconfig"
+    "${KERNEL_DIR}/KernelSU-Next/kernel/Kconfig"
   do
     if [[ -f "${candidate}" ]]; then
       printf '%s\n' "${candidate}"
@@ -250,55 +241,15 @@ kconfig_path() {
   return 1
 }
 
-setup_official_kernelsu() {
-  local repo="$1" ref="$2"
-  local manager_dir="${KERNEL_DIR}/KernelSU"
-  local driver_dir driver_makefile driver_kconfig
-  local source_line='source "drivers/kernelsu/Kconfig"'
-
-  # Avoid upstream setup.sh: its git pull/checkout assumptions break on
-  # manifest-based kernel trees and can leave a partially integrated manager.
-  log "Installing official KernelSU directly: ${repo} @ ${ref}"
-  [[ -n "${ref}" ]] || ref="main"
-  clone_ref "$(github_url "${repo}")" "${manager_dir}" "${ref}"
-
-  if [[ -d "${KERNEL_DIR}/common/drivers" ]]; then
-    driver_dir="${KERNEL_DIR}/common/drivers"
-  elif [[ -d "${KERNEL_DIR}/drivers" ]]; then
-    driver_dir="${KERNEL_DIR}/drivers"
-  else
-    die "KernelSU: drivers directory not found in ${KERNEL_DIR}"
-  fi
-
-  [[ -f "${manager_dir}/kernel/Kconfig" ]] || die "KernelSU source has no kernel/Kconfig at ${ref}"
-  driver_makefile="${driver_dir}/Makefile"
-  driver_kconfig="${driver_dir}/Kconfig"
-  [[ -f "${driver_makefile}" && -f "${driver_kconfig}" ]] || die "KernelSU: missing drivers Makefile/Kconfig"
-
-  ln -sfn "$(realpath --relative-to="${driver_dir}" "${manager_dir}/kernel")" "${driver_dir}/kernelsu"
-  grep -Fq 'obj-$(CONFIG_KSU) += kernelsu/' "${driver_makefile}" ||
-    printf '\nobj-$(CONFIG_KSU) += kernelsu/\n' >> "${driver_makefile}"
-
-  if ! grep -Fq "${source_line}" "${driver_kconfig}"; then
-    if grep -q '^endmenu' "${driver_kconfig}"; then
-      sed -i "/^endmenu/i\\${source_line}" "${driver_kconfig}"
-    else
-      printf '\n%s\n' "${source_line}" >> "${driver_kconfig}"
-    fi
-  fi
-
-  log "Official KernelSU integrated from $(git -C "${manager_dir}" rev-parse --short HEAD)"
-}
-
 setup_manager_from() {
   local repo="$1" ref="$2"
-  if [[ "${repo}" == "tiann/KernelSU" ]]; then
-    setup_official_kernelsu "${repo}" "${ref}"
-    return
-  fi
-
   local url="https://raw.githubusercontent.com/${repo}/${ref}/${MANAGER_SETUP}"
   log "Manager setup ${repo} @ ${ref}"
+  # Some kernel trees list KernelSU as a submodule. A shallow clone leaves an empty
+  # KernelSU/ directory, so setup.sh skips its clone and runs git inside the kernel repo.
+  # Remove the stale directory and symlink so setup.sh starts from a clean state.
+  rm -rf "${KERNEL_DIR}/KernelSU" "${KERNEL_DIR}/KernelSU-Next" \
+    "${KERNEL_DIR}/drivers/kernelsu" "${KERNEL_DIR}/common/drivers/kernelsu"
   curl -fsSL "${url}" -o "${SRC}/manager-setup.sh"
   (
     cd "${KERNEL_DIR}"
@@ -548,4 +499,49 @@ EOF
   if [[ "${BUILD_SCOPE}" == "full" || "${NOMOUNT}" == "lkm" ]]; then
     local ko_roots=("${out}")
     if [[ -n "${MODULES_SRC}" && -d "${KERNEL_DIR}/${MODULES_SRC}" ]]; then
-      ko_roots+=("${KERNEL_DIR}/${MODULES
+      ko_roots+=("${KERNEL_DIR}/${MODULES_SRC}")
+    fi
+    if [[ -d "${KERNEL_DIR}/fs/nomount" ]]; then
+      ko_roots+=("${KERNEL_DIR}/fs/nomount")
+    fi
+    if find "${ko_roots[@]}" -name '*.ko' -print -quit | grep -q .; then
+      find "${ko_roots[@]}" -name '*.ko' -print0 | tar --null -T - -czf "${RELEASE}/modules.tar.gz"
+    fi
+    if [[ "${BUILD_SCOPE}" == "full" ]] && find "${out}/arch/${ARCH}/boot/dts" -name '*.dtb' -print -quit 2>/dev/null | grep -q .; then
+      find "${out}/arch/${ARCH}/boot/dts" -name '*.dtb' -print0 | tar --null -T - -czf "${RELEASE}/dtbs.tar.gz"
+    fi
+  fi
+
+  if [[ "${USE_CCACHE}" == "true" ]] && command -v ccache >/dev/null 2>&1; then
+    ccache -s > "${RELEASE}/ccache-stats.txt" || true
+  fi
+}
+
+build_techpack() {
+  local cc="$1" jobs="$2" out="$3"
+  if [[ -z "${MODULES_SRC}" || -z "${MODULES_LIST}" || ! -f "${ROOT}/${MODULES_LIST}" ]]; then
+    log "No techpack list for this source"
+    return
+  fi
+  local src="${KERNEL_DIR}/${MODULES_SRC}"
+  if [[ ! -d "${src}" ]]; then
+    die "Techpack directory missing: ${src}"
+  fi
+  local module
+  while IFS= read -r module; do
+    [[ -z "${module}" || "${module}" == \#* ]] && continue
+    if [[ ! -d "${src}/${module}" ]]; then
+      log "::warning::Skipping missing techpack ${module}"
+      continue
+    fi
+    log "Techpack ${module}"
+    make -C "${KERNEL_DIR}" -j"${jobs}" O="${out}" ARCH="${ARCH}" LLVM=1 LLVM_IAS=1 CC="${cc}" \
+      M="${src}/${module}" KERNEL_SRC="${KERNEL_DIR}" OUT_DIR="${out}" modules
+  done < "${ROOT}/${MODULES_LIST}"
+}
+
+package_zip() {
+  local ak="${ROOT}/ak3-work"
+  rm -rf "${ak}"
+  clone_ref "${ANYKERNEL_REPO}" "${ak}" "${ANYKERNEL_REF}"
+  local susfs_tag="nos
