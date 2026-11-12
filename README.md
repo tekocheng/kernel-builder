@@ -49,7 +49,7 @@ Toolchains are cached between runs, but only after a successful run. The `androi
 
 ## LTO
 
-`thin` is the default and the safe choice on GitHub-hosted runners (16 GB RAM). `full` links the whole kernel in one process and needs about 32 GB. On a smaller machine the build prints a warning and uses `thin` instead, because the runner otherwise kills the linker and drops the job. `none` is the fastest and uses the least memory.
+`thin` is the default and the fastest safe choice on GitHub-hosted runners (16 GB RAM). `full` links the whole kernel in one process and needs about 30 GB of RAM plus swap. The workflow adds a 16 GB swap file and sets `vm.swappiness=100`, which is enough on a hosted runner but slow while it swaps. If RAM plus swap is below 30 GB, the build prints a warning and uses `thin` instead, because the runner otherwise kills the linker and drops the job. `none` uses the least memory.
 
 ## Root managers
 
@@ -184,7 +184,7 @@ This writes `release/plan.env` and does not download or compile anything.
 | `Unable to fetch ... @ ...` | Wrong branch, tag, or commit in `source_ref` or the preset |
 | `Manager setup did not create a kernel Kconfig` | The manager setup failed. Check the lines before it. Pin `manager_ref` if upstream changed |
 | `SUSFS ... patch does not apply` | Pin `manager_ref` or `source_ref`, or change `susfs_branch` / `susfs_ref` |
-| `The runner has received a shutdown signal` after `LTO vmlinux.o` | Out of memory. Use `lto=thin` |
+| `The runner has received a shutdown signal` after `LTO vmlinux.o` | Out of memory with `lto=full`. Use `lto=thin`, or check that the swap step in the workflow still creates 16 GB |
 | `curl: (22)` while fetching a toolchain | The download link moved. Update `ANDROID_CLANG_URL` or the LLVM URL in `scripts/build.sh` |
 
 ## Credits
