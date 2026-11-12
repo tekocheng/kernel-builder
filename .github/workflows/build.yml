@@ -100,6 +100,10 @@ on:
           - auto
           - android-r596125
           - llvm-23.1.5
+      toolchain_url:
+        description: "Optional https link to a clang archive (tar.gz, tar.xz). Overrides toolchain for this run only."
+        type: string
+        default: ""
       lto:
         description: "thin is the safe default. full needs about 30 GB of RAM plus swap and is slow on hosted runners."
         type: choice
@@ -139,7 +143,7 @@ jobs:
       matrix: ${{ steps.gen.outputs.matrix }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
 
       - name: Expand source and manager matrix
         id: gen
@@ -166,7 +170,7 @@ jobs:
       matrix: ${{ fromJSON(needs.matrix.outputs.matrix) }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
 
       - name: Free disk and add swap
         run: |
@@ -183,14 +187,13 @@ jobs:
           df -h /
 
       - name: Restore toolchain and ccache
-        uses: actions/cache@v5
+        uses: actions/cache@v4
         with:
           path: |
-            android-clang
-            llvm-23.1.5
+            toolchains
             /home/runner/.ccache
             /home/runner/.cache/thinlto
-          key: kernel-tools-v1-${{ runner.os }}-${{ inputs.toolchain }}-${{ hashFiles('scripts/build.sh') }}
+          key: kernel-tools-v1-${{ runner.os }}-${{ inputs.toolchain }}-${{ hashFiles('scripts/build.sh', 'config/toolchains.json') }}
           restore-keys: |
             kernel-tools-v1-${{ runner.os }}-${{ inputs.toolchain }}-
             kernel-tools-v1-${{ runner.os }}-
@@ -213,6 +216,7 @@ jobs:
           NOMOUNT: ${{ inputs.nomount }}
           NOMOUNT_REF: ${{ inputs.nomount_ref }}
           TOOLCHAIN: ${{ inputs.toolchain }}
+          TOOLCHAIN_URL: ${{ inputs.toolchain_url }}
           LTO: ${{ inputs.lto }}
           BUILD_SCOPE: ${{ inputs.build_scope }}
           USE_CCACHE: ${{ inputs.ccache }}
@@ -220,7 +224,7 @@ jobs:
 
       - name: Upload build outputs
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ inputs.device }}-${{ matrix.source }}-${{ matrix.manager }}-r${{ github.run_number }}
           path: release/
@@ -236,7 +240,7 @@ jobs:
       contents: write
     steps:
       - name: Download zips
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v4
         with:
           pattern: ${{ inputs.device }}-*-r${{ github.run_number }}
           path: artifacts
