@@ -77,7 +77,7 @@ on:
         options:
           - auto
           - android-r596125
-          - llvm-23.1.1
+          - llvm-23.1.5
       lto:
         description: "thin is the safe default on GitHub-hosted runners"
         type: choice
@@ -117,7 +117,8 @@ jobs:
       matrix: ${{ steps.gen.outputs.matrix }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
+
       - name: Expand source and manager matrix
         id: gen
         env:
@@ -142,10 +143,12 @@ jobs:
       matrix: ${{ fromJSON(needs.matrix.outputs.matrix) }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
+
       - name: Free disk and add swap
         run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc             /usr/local/share/boost /usr/share/swift /usr/local/.ghcup || true
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /usr/local/share/boost /usr/share/swift /usr/local/.ghcup || true
           sudo apt-get clean || true
           sudo swapoff /swapfile || true
           sudo rm -f /swapfile || true
@@ -154,18 +157,20 @@ jobs:
           sudo mkswap /swapfile
           sudo swapon /swapfile
           df -h /
+
       - name: Restore toolchain and ccache
-        uses: actions/cache@v5
+        uses: actions/cache@v4
         with:
           path: |
             android-clang
-            llvm-23.1.1
+            llvm-23.1.5
             /home/runner/.ccache
             /home/runner/.cache/thinlto
           key: kernel-tools-v1-${{ runner.os }}-${{ inputs.toolchain }}-${{ hashFiles('scripts/build.sh') }}
           restore-keys: |
             kernel-tools-v1-${{ runner.os }}-${{ inputs.toolchain }}-
             kernel-tools-v1-${{ runner.os }}-
+
       - name: Build
         env:
           DEVICE: ${{ inputs.device }}
@@ -187,9 +192,10 @@ jobs:
           BUILD_SCOPE: ${{ inputs.build_scope }}
           USE_CCACHE: ${{ inputs.ccache }}
         run: bash scripts/build.sh
+
       - name: Upload build outputs
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ inputs.device }}-${{ matrix.source }}-${{ matrix.manager }}-r${{ github.run_number }}
           path: release/
@@ -205,11 +211,12 @@ jobs:
       contents: write
     steps:
       - name: Download zips
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v4
         with:
           pattern: ${{ inputs.device }}-*-r${{ github.run_number }}
           path: artifacts
           merge-multiple: false
+
       - name: Publish draft
         env:
           GH_TOKEN: ${{ github.token }}
@@ -220,4 +227,8 @@ jobs:
             exit 1
           fi
           tag="${{ inputs.device }}-r${GITHUB_RUN_NUMBER}"
-          gh release create "${tag}" "${files[@]}"             --draft             --target "${GITHUB_SHA}"             --title "${{ inputs.device }} kernel r${GITHUB_RUN_NUMBER}"             --notes "Draft from workflow run ${GITHUB_RUN_NUMBER}. Flash the zip that matches your ROM."
+          gh release create "${tag}" "${files[@]}" \
+            --draft \
+            --target "${GITHUB_SHA}" \
+            --title "${{ inputs.device }} kernel r${GITHUB_RUN_NUMBER}" \
+            --notes "Draft from workflow run ${GITHUB_RUN_NUMBER}. Flash the zip that matches your ROM."
