@@ -204,18 +204,13 @@ fetch_toolchain() {
         git -C "${repo}" checkout -q
         mkdir -p "${ROOT}/android-clang"
         rm -rf "${ROOT}/android-clang/clang-r596125"
-        if [[ -d "${repo}/clang-r596125" ]]; then
-          mv "${repo}/clang-r596125" "${ROOT}/android-clang/"
-        else
-          local real_path
-          real_path=$(find "${repo}" -type f -name "clang" -path "*/bin/clang" | head -n 1)
-          if [[ -n "${real_path}" ]]; then
-            mv "$(dirname "$(dirname "${real_path}")")" "${ROOT}/android-clang/clang-r596125"
-          else
-            die "Could not find bin/clang in the downloaded android clang repo."
-          fi
-        fi
+        local clang_path clang_root
+        clang_path="$(find "${repo}" -type f -path "*/bin/clang" -print -quit)"
+        [[ -n "${clang_path}" ]] || die "Could not find bin/clang in the downloaded android clang repo."
+        clang_root="$(dirname "$(dirname "${clang_path}")")"
+        mv "${clang_root}" "${ROOT}/android-clang/clang-r596125"
         rm -rf "${repo}"
+        [[ -x "${bin}/clang" ]] || die "Downloaded android-r596125 toolchain is incomplete."
       fi
       TOOLCHAIN_BIN="${bin}"
       ;;
@@ -243,7 +238,9 @@ kconfig_path() {
   local candidate
   for candidate in \
     "${KERNEL_DIR}/KernelSU/kernel/Kconfig" \
-    "${KERNEL_DIR}/KernelSU-Next/kernel/Kconfig"
+    "${KERNEL_DIR}/KernelSU-Next/kernel/Kconfig" \
+    "${KERNEL_DIR}/drivers/kernelsu/Kconfig" \
+    "${KERNEL_DIR}/common/drivers/kernelsu/Kconfig"
   do
     if [[ -f "${candidate}" ]]; then
       printf '%s\n' "${candidate}"
@@ -253,8 +250,53 @@ kconfig_path() {
   return 1
 }
 
+setup_official_kernelsu() {
+  local repo="$1" ref="$2"
+  local manager_dir="${KERNEL_DIR}/KernelSU"
+  local driver_dir driver_makefile driver_kconfig
+  local source_line='source "drivers/kernelsu/Kconfig"'
+
+  # Avoid upstream setup.sh: its git pull/checkout assumptions break on
+  # manifest-based kernel trees and can leave a partially integrated manager.
+  log "Installing official KernelSU directly: ${repo} @ ${ref}"
+  [[ -n "${ref}" ]] || ref="main"
+  clone_ref "$(github_url "${repo}")" "${manager_dir}" "${ref}"
+
+  if [[ -d "${KERNEL_DIR}/common/drivers" ]]; then
+    driver_dir="${KERNEL_DIR}/common/drivers"
+  elif [[ -d "${KERNEL_DIR}/drivers" ]]; then
+    driver_dir="${KERNEL_DIR}/drivers"
+  else
+    die "KernelSU: drivers directory not found in ${KERNEL_DIR}"
+  fi
+
+  [[ -f "${manager_dir}/kernel/Kconfig" ]] || die "KernelSU source has no kernel/Kconfig at ${ref}"
+  driver_makefile="${driver_dir}/Makefile"
+  driver_kconfig="${driver_dir}/Kconfig"
+  [[ -f "${driver_makefile}" && -f "${driver_kconfig}" ]] || die "KernelSU: missing drivers Makefile/Kconfig"
+
+  ln -sfn "$(realpath --relative-to="${driver_dir}" "${manager_dir}/kernel")" "${driver_dir}/kernelsu"
+  grep -Fq 'obj-$(CONFIG_KSU) += kernelsu/' "${driver_makefile}" ||
+    printf '\nobj-$(CONFIG_KSU) += kernelsu/\n' >> "${driver_makefile}"
+
+  if ! grep -Fq "${source_line}" "${driver_kconfig}"; then
+    if grep -q '^endmenu' "${driver_kconfig}"; then
+      sed -i "/^endmenu/i\\${source_line}" "${driver_kconfig}"
+    else
+      printf '\n%s\n' "${source_line}" >> "${driver_kconfig}"
+    fi
+  fi
+
+  log "Official KernelSU integrated from $(git -C "${manager_dir}" rev-parse --short HEAD)"
+}
+
 setup_manager_from() {
   local repo="$1" ref="$2"
+  if [[ "${repo}" == "tiann/KernelSU" ]]; then
+    setup_official_kernelsu "${repo}" "${ref}"
+    return
+  fi
+
   local url="https://raw.githubusercontent.com/${repo}/${ref}/${MANAGER_SETUP}"
   log "Manager setup ${repo} @ ${ref}"
   curl -fsSL "${url}" -o "${SRC}/manager-setup.sh"
@@ -506,113 +548,4 @@ EOF
   if [[ "${BUILD_SCOPE}" == "full" || "${NOMOUNT}" == "lkm" ]]; then
     local ko_roots=("${out}")
     if [[ -n "${MODULES_SRC}" && -d "${KERNEL_DIR}/${MODULES_SRC}" ]]; then
-      ko_roots+=("${KERNEL_DIR}/${MODULES_SRC}")
-    fi
-    if [[ -d "${KERNEL_DIR}/fs/nomount" ]]; then
-      ko_roots+=("${KERNEL_DIR}/fs/nomount")
-    fi
-    if find "${ko_roots[@]}" -name '*.ko' -print -quit | grep -q .; then
-      find "${ko_roots[@]}" -name '*.ko' -print0 | tar --null -T - -czf "${RELEASE}/modules.tar.gz"
-    fi
-    if [[ "${BUILD_SCOPE}" == "full" ]] && find "${out}/arch/${ARCH}/boot/dts" -name '*.dtb' -print -quit 2>/dev/null | grep -q .; then
-      find "${out}/arch/${ARCH}/boot/dts" -name '*.dtb' -print0 | tar --null -T - -czf "${RELEASE}/dtbs.tar.gz"
-    fi
-  fi
-
-  if [[ "${USE_CCACHE}" == "true" ]] && command -v ccache >/dev/null 2>&1; then
-    ccache -s > "${RELEASE}/ccache-stats.txt" || true
-  fi
-}
-
-build_techpack() {
-  local cc="$1" jobs="$2" out="$3"
-  if [[ -z "${MODULES_SRC}" || -z "${MODULES_LIST}" || ! -f "${ROOT}/${MODULES_LIST}" ]]; then
-    log "No techpack list for this source"
-    return
-  fi
-  local src="${KERNEL_DIR}/${MODULES_SRC}"
-  if [[ ! -d "${src}" ]]; then
-    die "Techpack directory missing: ${src}"
-  fi
-  local module
-  while IFS= read -r module; do
-    [[ -z "${module}" || "${module}" == \#* ]] && continue
-    if [[ ! -d "${src}/${module}" ]]; then
-      log "::warning::Skipping missing techpack ${module}"
-      continue
-    fi
-    log "Techpack ${module}"
-    make -C "${KERNEL_DIR}" -j"${jobs}" O="${out}" ARCH="${ARCH}" LLVM=1 LLVM_IAS=1 CC="${cc}" \
-      M="${src}/${module}" KERNEL_SRC="${KERNEL_DIR}" OUT_DIR="${out}" modules
-  done < "${ROOT}/${MODULES_LIST}"
-}
-
-package_zip() {
-  local ak="${ROOT}/ak3-work"
-  rm -rf "${ak}"
-  clone_ref "${ANYKERNEL_REPO}" "${ak}" "${ANYKERNEL_REF}"
-  local susfs_tag="nosusfs" nm_tag="nm-${NOMOUNT}"
-  [[ "${ENABLE_SUSFS}" == "true" ]] && susfs_tag="susfs"
-  local version
-  version="$(tr -d '\n' < "${RELEASE}/susfs-version.txt" 2>/dev/null || true)"
-  local string="${DEVICE} ${SOURCE_DISPLAY} ${MANAGER_DISPLAY} ${susfs_tag} ${nm_tag}"
-  [[ -n "${version}" ]] && string="${string} ${version}"
-  sed \
-    -e "s|__KERNEL_STRING__|${string}|" \
-    -e "s|__DEVICE_NAME_1__|${DEVICE_NAME_1}|" \
-    -e "s|__DEVICE_NAME_2__|${DEVICE_NAME_2}|" \
-    "${ROOT}/ak3/anykernel.sh" > "${ak}/anykernel.sh"
-  if [[ -z "${DEVICE_NAME_2}" ]]; then
-    sed -i '/^device.name2=/d' "${ak}/anykernel.sh"
-  fi
-  local image
-  image="$(find "${RELEASE}" -maxdepth 1 -type f \( -name 'Image' -o -name 'Image.gz' -o -name 'Image.gz-dtb' \) -print -quit)"
-  cp -f "${image}" "${ak}/"
-  rm -rf "${ak}/.git" "${ak}/README.md" "${ak}/"*.placeholder
-  local run="${GITHUB_RUN_NUMBER:-local}"
-  local name="${DEVICE}-${SOURCE_KEY}-${MANAGER}-${susfs_tag}-${nm_tag}-r${run}.zip"
-  (
-    cd "${ak}"
-    zip -r9 "${RELEASE}/${name}" . -x '.git/*'
-  )
-  ( cd "${RELEASE}" && sha256sum "${name}" > "${name}.sha256" )
-  if [[ -f "${RELEASE}/nomount.ko" ]]; then
-    cp -f "${RELEASE}/nomount.ko" "${RELEASE}/${name%.zip}-nomount.ko"
-  fi
-  cat > "${RELEASE}/build-info.txt" <<EOF
-device: ${DEVICE} (${DEVICE_NAME_1} ${DEVICE_NAME_2})
-source: ${SOURCE_DISPLAY} [${SOURCE_KEY}] ${ROM_LABEL}
-fetch: ${FETCH}
-kernel: ${KERNEL_REPO:-${MANIFEST_REPO}} @ ${KERNEL_REF:-${MANIFEST_REF}}
-kernel_commit: $(cat "${RELEASE}/kernel-commit.txt" 2>/dev/null || echo unknown)
-manager: ${MANAGER_DISPLAY} ${MANAGER_REPO}@${MANAGER_REF}
-susfs: ${ENABLE_SUSFS} ${SUSFS_BRANCH} ${SUSFS_REF:-HEAD} $(cat "${RELEASE}/susfs-version.txt" 2>/dev/null || true)
-susfs_commit: $(cat "${RELEASE}/susfs-commit.txt" 2>/dev/null || echo n/a)
-nomount: ${NOMOUNT} ${NOMOUNT_REF}
-toolchain: ${TOOLCHAIN}
-lto: ${LTO}
-scope: ${BUILD_SCOPE}
-zip: ${name}
-EOF
-  log "Packaged ${name}"
-  if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
-    {
-      echo "### ${name}"
-      echo
-      echo '```'
-      cat "${RELEASE}/build-info.txt"
-      echo '```'
-    } >> "${GITHUB_STEP_SUMMARY}"
-  fi
-}
-
-install_deps
-fetch_tree
-resolve_defconfig_if_auto
-fetch_toolchain
-apply_manager
-apply_susfs
-apply_nomount
-make_kernel
-package_zip
-log "Done"
+      ko_roots+=("${KERNEL_DIR}/${MODULES
