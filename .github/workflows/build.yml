@@ -1,0 +1,232 @@
+name: Build kernel
+
+on:
+  workflow_dispatch:
+    inputs:
+      device:
+        description: "Device name. Matches config/devices/<name>.env"
+        type: string
+        default: marble
+      kernel_source:
+        description: "Key in config/sources.json (aospa, aosp, melt) or custom"
+        type: string
+        default: aosp
+      all_sources:
+        description: "Build every source in config/sources.json"
+        type: boolean
+        default: false
+      source_ref:
+        description: "Override the kernel branch, tag, or commit. Empty keeps the preset."
+        type: string
+        default: ""
+      custom_repo:
+        description: "custom source only. owner/name, or a manifest repo when custom_fetch=manifest"
+        type: string
+        default: ""
+      custom_ref:
+        description: "custom source only. Branch, tag, or commit"
+        type: string
+        default: ""
+      custom_fetch:
+        description: "custom source only"
+        type: choice
+        default: git
+        options:
+          - git
+          - manifest
+      custom_kernel_path:
+        description: "custom source only. Kernel path inside the tree. Empty uses the default."
+        type: string
+        default: ""
+      manager:
+        description: "none, kernelsu, kernelsu-next, sukisu-ultra, resukisu, or all"
+        type: string
+        default: kernelsu
+      manager_ref:
+        description: "Override the manager branch, tag, or commit"
+        type: string
+        default: ""
+      enable_susfs:
+        description: "Apply SUSFS from gitlab simonpunk/susfs4ksu. Official KernelSU is patched from that tree."
+        type: boolean
+        default: true
+      susfs_ref:
+        description: "SUSFS commit or tag. Empty uses the branch tip."
+        type: string
+        default: ""
+      susfs_branch:
+        description: "SUSFS branch. Empty uses the device default (marble: gki-android12-5.10)."
+        type: string
+        default: ""
+      nomount:
+        description: "NoMount VFS redirection"
+        type: choice
+        default: off
+        options:
+          - off
+          - builtin
+          - lkm
+      nomount_ref:
+        description: "NoMount branch or tag. Empty uses dev."
+        type: string
+        default: ""
+      toolchain:
+        description: "auto follows the source preset"
+        type: choice
+        default: auto
+        options:
+          - auto
+          - android-r416183b
+          - llvm-22.1.8
+      lto:
+        description: "thin is the safe default on GitHub-hosted runners"
+        type: choice
+        default: thin
+        options:
+          - thin
+          - none
+          - full
+      build_scope:
+        description: "image-only flashes boot. full also builds in-tree modules, dtbs, and techpack."
+        type: choice
+        default: image-only
+        options:
+          - image-only
+          - full
+      ccache:
+        description: "Reuse compiler cache between runs"
+        type: boolean
+        default: true
+      draft_release:
+        description: "Create a draft GitHub release with the zip files"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  matrix:
+    name: Plan
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.gen.outputs.matrix }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Expand source and manager matrix
+        id: gen
+        env:
+          MATRIX_ONLY: "1"
+          DEVICE: ${{ inputs.device }}
+          KERNEL_SOURCE: ${{ inputs.kernel_source }}
+          ALL_SOURCES: ${{ inputs.all_sources }}
+          SOURCE_REF: ${{ inputs.source_ref }}
+          CUSTOM_REPO: ${{ inputs.custom_repo }}
+          CUSTOM_REF: ${{ inputs.custom_ref }}
+          CUSTOM_FETCH: ${{ inputs.custom_fetch }}
+          MANAGER: ${{ inputs.manager }}
+        run: bash scripts/build.sh
+
+  build:
+    name: ${{ matrix.source }} / ${{ matrix.manager }}
+    needs: matrix
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.matrix.outputs.matrix) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Free disk and add swap
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /usr/local/share/boost /usr/share/swift /usr/local/.ghcup || true
+          sudo apt-get clean || true
+          sudo fallocate -l 12G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=12288
+          sudo chmod 600 /swapfile
+          sudo mkswap /swapfile
+          sudo swapon /swapfile
+          df -h /
+
+      - name: Restore toolchain and ccache
+        uses: actions/cache@v4
+        with:
+          path: |
+            android-clang
+            llvm-22.1.8
+            /home/runner/.ccache
+            /home/runner/.cache/thinlto
+          key: kernel-tools-v1-${{ runner.os }}-${{ inputs.toolchain }}-${{ hashFiles('scripts/build.sh') }}
+          restore-keys: |
+            kernel-tools-v1-${{ runner.os }}-${{ inputs.toolchain }}-
+            kernel-tools-v1-${{ runner.os }}-
+
+      - name: Build
+        env:
+          DEVICE: ${{ inputs.device }}
+          KERNEL_SOURCE: ${{ matrix.source }}
+          SOURCE_REF: ${{ inputs.source_ref }}
+          CUSTOM_REPO: ${{ inputs.custom_repo }}
+          CUSTOM_REF: ${{ inputs.custom_ref }}
+          CUSTOM_FETCH: ${{ inputs.custom_fetch }}
+          CUSTOM_KERNEL_PATH: ${{ inputs.custom_kernel_path }}
+          MANAGER: ${{ matrix.manager }}
+          MANAGER_REF: ${{ inputs.manager_ref }}
+          ENABLE_SUSFS: ${{ inputs.enable_susfs }}
+          SUSFS_REF: ${{ inputs.susfs_ref }}
+          SUSFS_BRANCH: ${{ inputs.susfs_branch }}
+          NOMOUNT: ${{ inputs.nomount }}
+          NOMOUNT_REF: ${{ inputs.nomount_ref }}
+          TOOLCHAIN: ${{ inputs.toolchain }}
+          LTO: ${{ inputs.lto }}
+          BUILD_SCOPE: ${{ inputs.build_scope }}
+          USE_CCACHE: ${{ inputs.ccache }}
+        run: bash scripts/build.sh
+
+      - name: Upload build outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.device }}-${{ matrix.source }}-${{ matrix.manager }}-r${{ github.run_number }}
+          path: release/
+          if-no-files-found: warn
+          retention-days: 14
+
+  release:
+    name: Draft release
+    needs: build
+    if: ${{ inputs.draft_release && needs.build.result == 'success' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download zips
+        uses: actions/download-artifact@v4
+        with:
+          pattern: ${{ inputs.device }}-*-r${{ github.run_number }}
+          path: artifacts
+          merge-multiple: false
+
+      - name: Publish draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mapfile -t files < <(find artifacts -type f \( -name '*.zip' -o -name '*.sha256' -o -name '*-nomount.ko' \))
+          if (( ${#files[@]} == 0 )); then
+            echo "::error::No zip files were produced"
+            exit 1
+          fi
+          tag="${{ inputs.device }}-r${GITHUB_RUN_NUMBER}"
+          gh release create "${tag}" "${files[@]}" \
+            --draft \
+            --target "${GITHUB_SHA}" \
+            --title "${{ inputs.device }} kernel r${GITHUB_RUN_NUMBER}" \
+            --notes "Draft from workflow run ${GITHUB_RUN_NUMBER}. Flash the zip that matches your ROM."
