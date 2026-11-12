@@ -101,7 +101,7 @@ on:
           - android-r596125
           - llvm-23.1.5
       lto:
-        description: "thin is the safe default. full needs about 32 GB RAM, so hosted runners fall back to thin."
+        description: "thin is the safe default. full needs about 30 GB of RAM plus swap and is slow on hosted runners."
         type: choice
         default: thin
         options:
@@ -139,7 +139,7 @@ jobs:
       matrix: ${{ steps.gen.outputs.matrix }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Expand source and manager matrix
         id: gen
@@ -166,7 +166,7 @@ jobs:
       matrix: ${{ fromJSON(needs.matrix.outputs.matrix) }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Free disk and add swap
         run: |
@@ -175,14 +175,15 @@ jobs:
           sudo apt-get clean || true
           sudo swapoff /swapfile || true
           sudo rm -f /swapfile || true
-          sudo fallocate -l 12G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=12288
+          sudo fallocate -l 16G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=16384
           sudo chmod 600 /swapfile
           sudo mkswap /swapfile
           sudo swapon /swapfile
+          sudo sysctl -w vm.swappiness=100
           df -h /
 
       - name: Restore toolchain and ccache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             android-clang
@@ -219,7 +220,7 @@ jobs:
 
       - name: Upload build outputs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ${{ inputs.device }}-${{ matrix.source }}-${{ matrix.manager }}-r${{ github.run_number }}
           path: release/
@@ -235,7 +236,7 @@ jobs:
       contents: write
     steps:
       - name: Download zips
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           pattern: ${{ inputs.device }}-*-r${{ github.run_number }}
           path: artifacts
