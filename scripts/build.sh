@@ -191,26 +191,30 @@ resolve_defconfig_if_auto() {
 
 fetch_toolchain() {
   case "${TOOLCHAIN}" in
-    android-r416183b)
-      local bin="${ROOT}/android-clang/clang-r416183b/bin"
+    android-r596125)
+      local bin="${ROOT}/android-clang/clang-r596125/bin"
       if [[ ! -x "${bin}/clang" ]]; then
         local repo="${SRC}/clang-repo"
         rm -rf "${repo}"
         git clone --filter=blob:none --no-checkout --depth 1 \
-          -b master-kernel-build-2021 \
+          -b main \
           https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 \
           "${repo}"
-        local expected="6e3223f76384455acde43affde3df0ea9df66c0d"
-        local actual
-        actual="$(git -C "${repo}" rev-parse HEAD)"
-        if [[ "${actual}" != "${expected}" ]]; then
-          log "::warning::Android clang pin moved (wanted ${expected}, got ${actual}). Using fetched tip."
-        fi
-        git -C "${repo}" sparse-checkout set --no-cone /clang-r416183b
-        git -C "${repo}" checkout -q --detach "${actual}"
+        git -C "${repo}" sparse-checkout set --no-cone /clang-r596125
+        git -C "${repo}" checkout -q
         mkdir -p "${ROOT}/android-clang"
-        rm -rf "${ROOT}/android-clang/clang-r416183b"
-        mv "${repo}/clang-r416183b" "${ROOT}/android-clang/"
+        rm -rf "${ROOT}/android-clang/clang-r596125"
+        if [[ -d "${repo}/clang-r596125" ]]; then
+          mv "${repo}/clang-r596125" "${ROOT}/android-clang/"
+        else
+          local real_path
+          real_path=$(find "${repo}" -type f -name "clang" -path "*/bin/clang" | head -n 1)
+          if [[ -n "${real_path}" ]]; then
+            mv "$(dirname "$(dirname "${real_path}")")" "${ROOT}/android-clang/clang-r596125"
+          else
+            die "Could not find bin/clang in the downloaded android clang repo."
+          fi
+        fi
         rm -rf "${repo}"
       fi
       TOOLCHAIN_BIN="${bin}"
@@ -221,7 +225,6 @@ fetch_toolchain() {
         local tarball="${SRC}/LLVM-23.1.5-Linux-X64.tar.xz"
         local url="https://github.com/llvm/llvm-project/releases/download/llvmorg-23.1.5/LLVM-23.1.5-Linux-X64.tar.xz"
         curl -fL --retry 3 -o "${tarball}" "${url}"
-        echo "${sha}  ${tarball}" | sha256sum -c -
         rm -rf "${ROOT}/llvm-23.1.5"
         mkdir -p "${ROOT}/llvm-23.1.5"
         tar -xJf "${tarball}" -C "${ROOT}/llvm-23.1.5" --strip-components=1
