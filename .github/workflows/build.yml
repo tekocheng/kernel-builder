@@ -4,13 +4,21 @@ on:
   workflow_dispatch:
     inputs:
       device:
-        description: "Device name. Matches config/devices/<name>.env"
-        type: string
+        description: "Target device"
+        type: choice
         default: marble
+        options:
+          - marble
       kernel_source:
-        description: "Key in config/sources.json (aospa, aosp, melt) or custom"
-        type: string
+        description: "Select kernel source preset"
+        type: choice
         default: aosp
+        options:
+          - aospa
+          - aosp
+          - melt
+          - bouquet
+          - custom
       all_sources:
         description: "Build every source in config/sources.json"
         type: boolean
@@ -39,9 +47,16 @@ on:
         type: string
         default: ""
       manager:
-        description: "none, kernelsu, kernelsu-next, sukisu-ultra, resukisu, or all"
-        type: string
+        description: "Select root manager"
+        type: choice
         default: kernelsu
+        options:
+          - none
+          - kernelsu
+          - kernelsu-next
+          - sukisu-ultra
+          - resukisu
+          - all
       manager_ref:
         description: "Override the manager branch, tag, or commit"
         type: string
@@ -232,3 +247,4 @@ jobs:
             --target "${GITHUB_SHA}" \
             --title "${{ inputs.device }} kernel r${GITHUB_RUN_NUMBER}" \
             --notes "Draft from workflow run ${GITHUB_RUN_NUMBER}. Flash the zip that matches your ROM."
+            
