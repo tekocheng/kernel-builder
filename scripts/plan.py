@@ -8,6 +8,7 @@ config/devices/<name>.env. This file does not need a workflow edit.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import shlex
 import sys
@@ -17,6 +18,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SOURCES = json.loads((ROOT / "config" / "sources.json").read_text(encoding="utf-8"))
 MANAGERS = json.loads((ROOT / "config" / "managers.json").read_text(encoding="utf-8"))
+TOOLCHAINS = json.loads((ROOT / "config" / "toolchains.json").read_text(encoding="utf-8"))
 
 
 def die(message: str) -> None:
@@ -57,7 +59,6 @@ def source_entry(key: str, args: argparse.Namespace) -> dict:
             "rom": repo,
             "fetch": fetch,
             "defconfig_mode": "auto",
-            "toolchain": "llvm-23.1.5",
             "kernel_path": args.custom_kernel_path.strip(),
             "manifest_skip": ["prebuilts/clang", "prebuilts-master", "gcc/linux-x86"],
         }
@@ -115,6 +116,22 @@ def resolve_manager(name: str, susfs: bool, manager_ref: str, ksu_mode: str = "b
     }
 
 
+def resolve_toolchain(name: str, url: str, source: dict) -> tuple[str, dict]:
+    """Return (toolchain name, entry). A URL input wins over the name."""
+    url = url.strip()
+    if url:
+        if not url.startswith("https://"):
+            die("toolchain_url must start with https://")
+        return "custom-" + hashlib.sha1(url.encode()).hexdigest()[:8], {"url": url}
+    name = name.strip() or "auto"
+    if name == "auto":
+        defaults = [key for key, value in TOOLCHAINS.items() if value.get("default")]
+        name = source.get("toolchain") or (defaults[0] if defaults else "")
+    if name not in TOOLCHAINS:
+        die(f"Unknown toolchain '{name}'. Known: auto, {', '.join(TOOLCHAINS)}. Add it to config/toolchains.json")
+    return name, TOOLCHAINS[name]
+
+
 def fragments_for(entry: dict, device: dict[str, str]) -> str:
     if entry.get("config_fragments"):
         return " ".join(entry["config_fragments"])
@@ -132,11 +149,7 @@ def write_plan(args: argparse.Namespace) -> None:
         die("ksu_mode=lkm needs a root manager")
     manager = resolve_manager(args.manager, susfs, args.manager_ref, ksu_mode)
     mode = entry.get("defconfig_mode", "auto")
-    toolchain = args.toolchain.strip() or "auto"
-    if toolchain == "auto":
-        toolchain = entry.get("toolchain") or "llvm-23.1.5"
-    if toolchain not in {"android-r596125", "llvm-23.1.5"}:
-        die(f"Unsupported toolchain '{toolchain}'. Use auto, android-r596125, or llvm-23.1.5")
+    toolchain, toolchain_entry = resolve_toolchain(args.toolchain, args.toolchain_url, entry)
     nomount = args.nomount.strip() or "off"
     if nomount not in {"off", "builtin", "lkm"}:
         die("nomount must be off, builtin, or lkm")
@@ -170,6 +183,8 @@ def write_plan(args: argparse.Namespace) -> None:
         "SOURCE_REF_OVERRIDE": args.source_ref.strip(),
         "DEFCONFIG_MODE": mode,
         "TOOLCHAIN": toolchain,
+        "TOOLCHAIN_URL": toolchain_entry["url"],
+        "TOOLCHAIN_MAX_JOBS": str(toolchain_entry.get("max_jobs", "")),
         "LTO": args.lto,
         "BUILD_SCOPE": args.build_scope,
         "MODULES_SRC": entry.get("modules_src", ""),
@@ -302,6 +317,7 @@ def build_parser() -> argparse.ArgumentParser:
     plan.add_argument("--nomount", default="off")
     plan.add_argument("--nomount-ref", default="")
     plan.add_argument("--toolchain", default="auto")
+    plan.add_argument("--toolchain-url", default="")
     plan.add_argument("--lto", default="thin")
     plan.add_argument("--build-scope", default="image-only")
     plan.add_argument("--ccache", default="true")
