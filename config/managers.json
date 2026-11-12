@@ -12,7 +12,8 @@
     "ref": "main",
     "setup": "kernel/setup.sh",
     "susfs": true,
-    "notes": "Official KernelSU. SUSFS is the gki-android12-5.10 kernel patch plus 10_enable_susfs_for_ksu.patch from the same commit."
+    "notes": "Official KernelSU. SUSFS is the gki-android12-5.10 kernel patch plus 10_enable_susfs_for_ksu.patch from the same commit. Also builds as an LKM (kernelsu.ko) with ksu_mode=lkm.",
+    "lkm": true
   },
   "kernelsu-next": {
     "display": "KernelSU-Next",
