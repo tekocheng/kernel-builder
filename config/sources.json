@@ -21,13 +21,6 @@
     "repo": "aosp-pablo/android_kernel_xiaomi_sm8450",
     "ref": "17",
     "defconfig_mode": "gki_fragments",
-    "config_fragments": [
-      "vendor/waipio_GKI.config",
-      "vendor/xiaomi_GKI.config",
-      "vendor/marble_GKI.config",
-      "vendor/debugfs.config",
-      "vendor/infinity.config"
-    ],
     "toolchain": "llvm-23.1.5",
     "modules_src": "../sm8450-modules/qcom/opensource",
     "modules_list": "config/techpack-sm8450.txt",
