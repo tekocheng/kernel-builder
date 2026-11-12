@@ -22,7 +22,8 @@ Download the zip from the run artifacts. It flashes `boot` and checks the device
 | `manager_ref` | text | Overrides the manager branch, tag, or commit |
 | `enable_susfs` | on / off | Builtin mode only |
 | `nomount` | `off`, `builtin`, `lkm` | See [NoMount](#nomount) |
-| `toolchain` | `auto`, `android-r596125`, `llvm-23.1.5` | `auto` follows the source preset |
+| `toolchain` | `auto`, `android-r596125`, `llvm-23.1.5` | `auto` follows the source preset. Names come from `config/toolchains.json` |
+| `toolchain_url` | text | Optional https link to a clang archive. Overrides `toolchain` for this run only |
 | `lto` | `thin`, `none`, `full` | See [LTO](#lto) |
 | `build_scope` | `image-only`, `full` | `full` adds in-tree modules, dtbs, and the SM8450 techpack list |
 | `ccache` | on / off | Compiler cache between runs |
@@ -40,12 +41,14 @@ Download the zip from the run artifacts. It flashes `boot` and checks the device
 
 ## Toolchains
 
+Toolchains are data in [config/toolchains.json](config/toolchains.json). Each entry is a download link plus optional settings.
+
 | Name | Source | Notes |
 |---|---|---|
-| `android-r596125` | [Neebe3289/aosp-clang](https://github.com/Neebe3289/aosp-clang) release `clang-22.0.2-15682573` (Clang 22.0.2, based on r596125), about 1 GB | Replace the link with `ANDROID_CLANG_URL` (top of `scripts/build.sh`) |
-| `llvm-23.1.5` | Upstream [llvm-project](https://github.com/llvm/llvm-project/releases/tag/llvmorg-23.1.5) release, about 1.9 GB | Make jobs are capped at 2 to stay inside runner memory |
+| `android-r596125` | [Neebe3289/aosp-clang](https://github.com/Neebe3289/aosp-clang) release `clang-22.0.2-15682573` (Clang 22.0.2, based on r596125), about 1 GB | |
+| `llvm-23.1.5` | Upstream [llvm-project](https://github.com/llvm/llvm-project/releases/tag/llvmorg-23.1.5) release, about 1.9 GB | Default. `max_jobs` is 2 to stay inside runner memory |
 
-Toolchains are cached between runs, but only after a successful run. The `android-clang/` and `llvm-23.1.5/` folders are in the cache path.
+The build downloads the archive, finds `bin/clang` inside it (at the root or in one folder), and uses that. The result is cached in `toolchains/` between runs, but only after a successful run. A `toolchain_url` run is cached only by chance, so it may download again.
 
 ## LTO
 
@@ -165,9 +168,20 @@ The AnyKernel3 script only allows `DEVICE_NAME_1` and `DEVICE_NAME_2`.
 
 Edit [config/managers.json](config/managers.json), then add the key to the `manager` options in the workflow. Each entry needs `repo`, `ref`, and `setup` (usually `kernel/setup.sh`). `susfs_ref` replaces `ref` when SUSFS is on. `susfs_fallback_repo` is optional. Add `"lkm": true` only after the manager builds as a module with the recipe in `scripts/build.sh`.
 
-## Add a toolchain
+## Add or update a toolchain
 
-Add a case to `fetch_toolchain` in `scripts/build.sh`, add the name to the allowed set in `scripts/plan.py` and to the `toolchain` options in the workflow, and add its folder to the cache path.
+For one run, paste an https link to a `tar.gz` or `tar.xz` archive into `toolchain_url`. Nothing else changes.
+
+To keep it, add an object to [config/toolchains.json](config/toolchains.json) and add its name to the `toolchain` options in the workflow:
+
+```json
+"llvm-24.1.0": {
+  "url": "https://github.com/llvm/llvm-project/releases/download/llvmorg-24.1.0/LLVM-24.1.0-Linux-X64.tar.xz",
+  "max_jobs": 2
+}
+```
+
+`max_jobs` is optional and caps the make jobs. `"default": true` makes it the toolchain for sources that do not name one. Versions are pinned on purpose, so a new release never changes a build by itself. To use a new toolchain on a source, set its `toolchain` field in `config/sources.json`.
 
 ## Local resolve check
 
@@ -185,7 +199,8 @@ This writes `release/plan.env` and does not download or compile anything.
 | `Manager setup did not create a kernel Kconfig` | The manager setup failed. Check the lines before it. Pin `manager_ref` if upstream changed |
 | `SUSFS ... patch does not apply` | Pin `manager_ref` or `source_ref`, or change `susfs_branch` / `susfs_ref` |
 | `The runner has received a shutdown signal` after `LTO vmlinux.o` | Out of memory with `lto=full`. Use `lto=thin`, or check that the swap step in the workflow still creates 16 GB |
-| `curl: (22)` while fetching a toolchain | The download link moved. Update `ANDROID_CLANG_URL` or the LLVM URL in `scripts/build.sh` |
+| `curl: (22)` while fetching a toolchain | The download link moved. Update the `url` in `config/toolchains.json`, or use `toolchain_url` for one run |
+| `No bin/clang inside ...` | The archive is not a clang toolchain, or `bin/clang` is deeper than one folder |
 
 ## Credits
 
