@@ -1,0 +1,51 @@
+{
+  "aospa": {
+    "display": "AOSPA",
+    "rom": "Paranoid Android calcite",
+    "fetch": "manifest",
+    "manifest_repo": "aospa-shadedark/kernel_manifest",
+    "manifest_ref": "calcite-xiaomi-sm8450",
+    "manifest_file": "default.xml",
+    "kernel_path": "kernel_platform/xiaomi/sm8450",
+    "manifest_skip": ["prebuilts/clang", "prebuilts-master", "gcc/linux-x86"],
+    "defconfig_mode": "gki_fragments",
+    "toolchain": "llvm-22.1.8",
+    "modules_src": "../sm8450-modules/qcom/opensource",
+    "modules_list": "config/techpack-sm8450.txt",
+    "notes": "Reads the manifest and clones its GitHub projects. AOSP clang and host gcc prebuilts are skipped; the selected toolchain is used instead."
+  },
+  "aosp": {
+    "display": "AOSP",
+    "rom": "aosp-pablo / LOS-based",
+    "fetch": "git",
+    "repo": "aosp-pablo/android_kernel_xiaomi_sm8450",
+    "ref": "17",
+    "defconfig_mode": "gki_fragments",
+    "toolchain": "llvm-22.1.8",
+    "modules_src": "../sm8450-modules/qcom/opensource",
+    "modules_list": "config/techpack-sm8450.txt",
+    "extra": [
+      {
+        "repo": "aosp-pablo/android_kernel_xiaomi_sm8450-modules",
+        "ref": "17",
+        "dest": "../sm8450-modules"
+      },
+      {
+        "repo": "aosp-pablo/android_kernel_xiaomi_sm8450-devicetrees",
+        "ref": "17",
+        "dest": "../sm8450-devicetrees"
+      }
+    ]
+  },
+  "melt": {
+    "display": "Melt",
+    "rom": "HyperOS",
+    "fetch": "git",
+    "repo": "Pzqqt/android_kernel_xiaomi_marble",
+    "ref": "melt-rebase",
+    "defconfig_mode": "single",
+    "defconfig": "marble_defconfig",
+    "toolchain": "android-r416183b",
+    "notes": "Single-tree HyperOS kernel. Flash the Image on stock HyperOS only."
+  }
+}

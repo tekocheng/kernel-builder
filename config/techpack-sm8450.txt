@@ -1,0 +1,19 @@
+# Out-of-tree modules under modules_src. Built only when scope=full.
+# Missing directories are skipped with a warning.
+mmrm-driver
+audio-kernel
+camera-kernel
+cvp-kernel
+dataipa/drivers/platform/msm
+datarmnet/core
+datarmnet-ext/aps
+datarmnet-ext/offload
+datarmnet-ext/shs
+datarmnet-ext/perf
+datarmnet-ext/perf_tether
+datarmnet-ext/sch
+datarmnet-ext/wlan
+display-drivers/msm
+eva-kernel
+video-driver
+wlan/qcacld-3.0/.qca6490
