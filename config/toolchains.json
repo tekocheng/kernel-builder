@@ -1,0 +1,12 @@
+{
+  "android-r596125": {
+    "url": "https://github.com/Neebe3289/aosp-clang/releases/download/clang-22.0.2-15682573/clang-22.0.2-15682573.tar.gz",
+    "notes": "AOSP Clang 22.0.2, based on Android r596125 (Neebe3289/aosp-clang release)."
+  },
+  "llvm-23.1.5": {
+    "url": "https://github.com/llvm/llvm-project/releases/download/llvmorg-23.1.5/LLVM-23.1.5-Linux-X64.tar.xz",
+    "max_jobs": 2,
+    "default": true,
+    "notes": "Upstream LLVM release. Make jobs are capped to stay inside runner memory."
+  }
+}
