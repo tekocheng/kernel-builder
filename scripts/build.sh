@@ -26,8 +26,7 @@ LTO="${LTO:-thin}"
 BUILD_SCOPE="${BUILD_SCOPE:-image-only}"
 USE_CCACHE="${USE_CCACHE:-true}"
 ALL_SOURCES="${ALL_SOURCES:-false}"
-# AOSP clang r596125 (Clang 22.0.2). android.googlesource.com main no longer carries this directory.
-ANDROID_CLANG_URL="${ANDROID_CLANG_URL:-https://github.com/Neebe3289/aosp-clang/releases/download/clang-22.0.2-15682573/clang-22.0.2-15682573.tar.gz}"
+TOOLCHAIN_URL="${TOOLCHAIN_URL:-}"
 
 SRC="${ROOT}/src"
 RELEASE="${ROOT}/release"
@@ -68,6 +67,7 @@ python3 "${ROOT}/scripts/plan.py" write-plan \
   --nomount "${NOMOUNT}" \
   --nomount-ref "${NOMOUNT_REF}" \
   --toolchain "${TOOLCHAIN}" \
+  --toolchain-url "${TOOLCHAIN_URL}" \
   --lto "${LTO}" \
   --build-scope "${BUILD_SCOPE}" \
   --ccache "${USE_CCACHE}" \
@@ -206,37 +206,24 @@ resolve_defconfig_if_auto() {
 }
 
 fetch_toolchain() {
-  case "${TOOLCHAIN}" in
-    android-r596125)
-      local bin="${ROOT}/android-clang/clang-r596125/bin"
-      if [[ ! -x "${bin}/clang" ]]; then
-        local tarball="${SRC}/clang-r596125.tar.gz"
-        curl -fL --retry 3 -o "${tarball}" "${ANDROID_CLANG_URL}"
-        rm -rf "${ROOT}/android-clang/clang-r596125"
-        mkdir -p "${ROOT}/android-clang/clang-r596125"
-        # The tarball has no top-level directory: bin/, lib/ ... sit at the root.
-        tar -xzf "${tarball}" -C "${ROOT}/android-clang/clang-r596125"
-        rm -f "${tarball}"
-        [[ -x "${bin}/clang" ]] || die "bin/clang missing after extracting ${ANDROID_CLANG_URL}"
-      fi
-      TOOLCHAIN_BIN="${bin}"
-      ;;
-    llvm-23.1.5)
-      local bin="${ROOT}/llvm-23.1.5/bin"
-      if [[ ! -x "${bin}/clang" ]]; then
-        local tarball="${SRC}/LLVM-23.1.5-Linux-X64.tar.xz"
-        local url="https://github.com/llvm/llvm-project/releases/download/llvmorg-23.1.5/LLVM-23.1.5-Linux-X64.tar.xz"
-        curl -fL --retry 3 -o "${tarball}" "${url}"
-        rm -rf "${ROOT}/llvm-23.1.5"
-        mkdir -p "${ROOT}/llvm-23.1.5"
-        tar -xJf "${tarball}" -C "${ROOT}/llvm-23.1.5" --strip-components=1
-      fi
-      TOOLCHAIN_BIN="${bin}"
-      ;;
-    *)
-      die "No fetch recipe for toolchain ${TOOLCHAIN}"
-      ;;
-  esac
+  [[ -n "${TOOLCHAIN_URL}" ]] || die "No download URL for toolchain ${TOOLCHAIN}. See config/toolchains.json"
+  local dir="${ROOT}/toolchains/${TOOLCHAIN}"
+  if [[ ! -x "${dir}/bin/clang" ]]; then
+    local archive="${SRC}/toolchain.archive" tmp="${SRC}/toolchain-tmp"
+    log "Toolchain ${TOOLCHAIN}: ${TOOLCHAIN_URL}"
+    curl -fL --retry 3 -o "${archive}" "${TOOLCHAIN_URL}"
+    rm -rf "${tmp}" "${dir}"
+    mkdir -p "${tmp}" "$(dirname "${dir}")"
+    tar -xf "${archive}" -C "${tmp}"
+    rm -f "${archive}"
+    # Archives differ: some have bin/ at the root, some nest it in one folder. Find it.
+    local clang_bin
+    clang_bin="$(find "${tmp}" -maxdepth 3 \( -type f -o -type l \) -path '*/bin/clang' -print -quit)"
+    [[ -n "${clang_bin}" ]] || die "No bin/clang inside ${TOOLCHAIN_URL}"
+    mv "$(dirname "$(dirname "${clang_bin}")")" "${dir}"
+    rm -rf "${tmp}"
+  fi
+  TOOLCHAIN_BIN="${dir}/bin"
   export PATH="${TOOLCHAIN_BIN}:${PATH}"
   "${TOOLCHAIN_BIN}/clang" --version | head -n 2
 }
@@ -397,9 +384,9 @@ make_kernel() {
 
   local jobs
   jobs="${JOBS:-$(nproc)}"
-  if [[ -z "${JOBS_FORCE:-}" && "${TOOLCHAIN}" == "llvm-23.1.5" && "${jobs}" -gt 2 ]]; then
-    log "Capping jobs from ${jobs} to 2 for ${TOOLCHAIN}"
-    jobs=2
+  if [[ -z "${JOBS_FORCE:-}" && -n "${TOOLCHAIN_MAX_JOBS}" && "${jobs}" -gt "${TOOLCHAIN_MAX_JOBS}" ]]; then
+    log "Capping jobs from ${jobs} to ${TOOLCHAIN_MAX_JOBS} for ${TOOLCHAIN}"
+    jobs="${TOOLCHAIN_MAX_JOBS}"
   fi
 
   local out="${KERNEL_DIR}/out"
