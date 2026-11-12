@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
-
 # Build one flashable marble (or other device) kernel.
 # Inputs are environment variables. See README.md.
-
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -32,23 +30,48 @@ SRC="${ROOT}/src"
 RELEASE="${ROOT}/release"
 mkdir -p "${SRC}" "${RELEASE}"
 
-log() { printf '%s
-' "$*"; }
-die() { printf '::error::%s
-' "$*" >&2; exit 1; }
+log() { printf '%s\n' "$*"; }
+die() { printf '::error::%s\n' "$*" >&2; exit 1; }
 
 if [[ -n "${GITHUB_OUTPUT:-}" && "${MATRIX_ONLY:-}" == "1" ]]; then
-  python3 "${ROOT}/scripts/plan.py" matrix     --device "${DEVICE}"     --kernel-source "${KERNEL_SOURCE}"     --source-ref "${SOURCE_REF}"     --custom-repo "${CUSTOM_REPO}"     --custom-ref "${CUSTOM_REF}"     --custom-fetch "${CUSTOM_FETCH}"     --manager "${MANAGER}"     --all-sources "${ALL_SOURCES}"     --github-output "${GITHUB_OUTPUT}"
+  python3 "${ROOT}/scripts/plan.py" matrix \
+    --device "${DEVICE}" \
+    --kernel-source "${KERNEL_SOURCE}" \
+    --source-ref "${SOURCE_REF}" \
+    --custom-repo "${CUSTOM_REPO}" \
+    --custom-ref "${CUSTOM_REF}" \
+    --custom-fetch "${CUSTOM_FETCH}" \
+    --manager "${MANAGER}" \
+    --all-sources "${ALL_SOURCES}" \
+    --github-output "${GITHUB_OUTPUT}"
   exit 0
 fi
 
-python3 "${ROOT}/scripts/plan.py" write-plan   --device "${DEVICE}"   --kernel-source "${KERNEL_SOURCE}"   --source-ref "${SOURCE_REF}"   --custom-repo "${CUSTOM_REPO}"   --custom-ref "${CUSTOM_REF}"   --custom-fetch "${CUSTOM_FETCH}"   --custom-kernel-path "${CUSTOM_KERNEL_PATH}"   --manager "${MANAGER}"   --manager-ref "${MANAGER_REF}"   --susfs "${ENABLE_SUSFS}"   --susfs-ref "${SUSFS_REF}"   --susfs-branch "${SUSFS_BRANCH}"   --nomount "${NOMOUNT}"   --nomount-ref "${NOMOUNT_REF}"   --toolchain "${TOOLCHAIN}"   --lto "${LTO}"   --build-scope "${BUILD_SCOPE}"   --ccache "${USE_CCACHE}"   --out "${RELEASE}/plan.env"
+python3 "${ROOT}/scripts/plan.py" write-plan \
+  --device "${DEVICE}" \
+  --kernel-source "${KERNEL_SOURCE}" \
+  --source-ref "${SOURCE_REF}" \
+  --custom-repo "${CUSTOM_REPO}" \
+  --custom-ref "${CUSTOM_REF}" \
+  --custom-fetch "${CUSTOM_FETCH}" \
+  --custom-kernel-path "${CUSTOM_KERNEL_PATH}" \
+  --manager "${MANAGER}" \
+  --manager-ref "${MANAGER_REF}" \
+  --susfs "${ENABLE_SUSFS}" \
+  --susfs-ref "${SUSFS_REF}" \
+  --susfs-branch "${SUSFS_BRANCH}" \
+  --nomount "${NOMOUNT}" \
+  --nomount-ref "${NOMOUNT_REF}" \
+  --toolchain "${TOOLCHAIN}" \
+  --lto "${LTO}" \
+  --build-scope "${BUILD_SCOPE}" \
+  --ccache "${USE_CCACHE}" \
+  --out "${RELEASE}/plan.env"
 
 # shellcheck disable=SC1091
 source "${RELEASE}/plan.env"
 
 log "Plan: ${SOURCE_DISPLAY} (${SOURCE_KEY}) ${FETCH} + ${MANAGER_DISPLAY} susfs=${ENABLE_SUSFS} nomount=${NOMOUNT} toolchain=${TOOLCHAIN} lto=${LTO} scope=${BUILD_SCOPE}"
-
 if [[ "${RESOLVE_ONLY:-}" == "1" ]]; then
   cat "${RELEASE}/plan.env"
   exit 0
@@ -69,7 +92,10 @@ install_deps() {
     return
   fi
   sudo_cmd apt-get update
-  sudo_cmd apt-get install -y --no-install-recommends     bc bison build-essential ca-certificates ccache clang cpio curl file flex     git libelf-dev libncurses-dev libssl-dev lld llvm patch python3 rsync     unzip xz-utils zip zstd device-tree-compiler
+  sudo_cmd apt-get install -y --no-install-recommends \
+    bc bison build-essential ca-certificates ccache clang cpio curl file flex \
+    git libelf-dev libncurses-dev libssl-dev lld llvm patch python3 rsync \
+    unzip xz-utils zip zstd device-tree-compiler
 }
 
 clone_ref() {
@@ -93,11 +119,9 @@ clone_ref() {
 github_url() {
   local repo="$1"
   if [[ "${repo}" == https://* || "${repo}" == git@* ]]; then
-    printf '%s
-' "${repo}"
+    printf '%s\n' "${repo}"
   else
-    printf 'https://github.com/%s.git
-' "${repo}"
+    printf 'https://github.com/%s.git\n' "${repo}"
   fi
 }
 
@@ -107,7 +131,12 @@ fetch_tree() {
     manifest_url="$(github_url "${MANIFEST_REPO}")"
     log "Manifest ${manifest_url} @ ${MANIFEST_REF}"
     clone_ref "${manifest_url}" "${SRC}/manifest" "${MANIFEST_REF}"
-    python3 "${ROOT}/scripts/plan.py" manifest       --xml "${SRC}/manifest/${MANIFEST_FILE}"       --skip "${MANIFEST_SKIP}"       --kernel-path "${KERNEL_PATH}"       --kernel-ref "${SOURCE_REF_OVERRIDE}"       > "${RELEASE}/projects.tsv"
+    python3 "${ROOT}/scripts/plan.py" manifest \
+      --xml "${SRC}/manifest/${MANIFEST_FILE}" \
+      --skip "${MANIFEST_SKIP}" \
+      --kernel-path "${KERNEL_PATH}" \
+      --kernel-ref "${SOURCE_REF_OVERRIDE}" \
+      > "${RELEASE}/projects.tsv"
     while IFS=$'\t' read -r url rev path; do
       [[ -n "${url}" ]] || continue
       log "Clone ${url} @ ${rev} -> ${path}"
@@ -162,30 +191,40 @@ resolve_defconfig_if_auto() {
 
 fetch_toolchain() {
   case "${TOOLCHAIN}" in
-    android-r596125)
-      local bin="${ROOT}/android-clang/clang-r596125/bin"
+    android-r416183b)
+      local bin="${ROOT}/android-clang/clang-r416183b/bin"
       if [[ ! -x "${bin}/clang" ]]; then
         local repo="${SRC}/clang-repo"
         rm -rf "${repo}"
-        git clone --filter=blob:none --no-checkout --depth 1           -b main           https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86           "${repo}"
-        git -C "${repo}" sparse-checkout set --no-cone /clang-r596125
-        git -C "${repo}" checkout -q
+        git clone --filter=blob:none --no-checkout --depth 1 \
+          -b master-kernel-build-2021 \
+          https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 \
+          "${repo}"
+        local expected="6e3223f76384455acde43affde3df0ea9df66c0d"
+        local actual
+        actual="$(git -C "${repo}" rev-parse HEAD)"
+        if [[ "${actual}" != "${expected}" ]]; then
+          log "::warning::Android clang pin moved (wanted ${expected}, got ${actual}). Using fetched tip."
+        fi
+        git -C "${repo}" sparse-checkout set --no-cone /clang-r416183b
+        git -C "${repo}" checkout -q --detach "${actual}"
         mkdir -p "${ROOT}/android-clang"
-        rm -rf "${ROOT}/android-clang/clang-r596125"
-        mv "${repo}/clang-r596125" "${ROOT}/android-clang/"
+        rm -rf "${ROOT}/android-clang/clang-r416183b"
+        mv "${repo}/clang-r416183b" "${ROOT}/android-clang/"
         rm -rf "${repo}"
       fi
       TOOLCHAIN_BIN="${bin}"
       ;;
-    llvm-23.1.1)
-      local bin="${ROOT}/llvm-23.1.1/bin"
+    llvm-23.1.5)
+      local bin="${ROOT}/llvm-23.1.5/bin"
       if [[ ! -x "${bin}/clang" ]]; then
-        local tarball="${SRC}/LLVM-23.1.1-Linux-X64.tar.xz"
-        local url="https://github.com/llvm/llvm-project/releases/download/llvmorg-23.1.1/LLVM-23.1.1-Linux-X64.tar.xz"
+        local tarball="${SRC}/LLVM-23.1.5-Linux-X64.tar.xz"
+        local url="https://github.com/llvm/llvm-project/releases/download/llvmorg-23.1.5/LLVM-23.1.5-Linux-X64.tar.xz"
         curl -fL --retry 3 -o "${tarball}" "${url}"
-        rm -rf "${ROOT}/llvm-23.1.1"
-        mkdir -p "${ROOT}/llvm-23.1.1"
-        tar -xJf "${tarball}" -C "${ROOT}/llvm-23.1.1" --strip-components=1
+        echo "${sha}  ${tarball}" | sha256sum -c -
+        rm -rf "${ROOT}/llvm-23.1.5"
+        mkdir -p "${ROOT}/llvm-23.1.5"
+        tar -xJf "${tarball}" -C "${ROOT}/llvm-23.1.5" --strip-components=1
       fi
       TOOLCHAIN_BIN="${bin}"
       ;;
@@ -199,11 +238,12 @@ fetch_toolchain() {
 
 kconfig_path() {
   local candidate
-  for candidate in     "${KERNEL_DIR}/KernelSU/kernel/Kconfig"     "${KERNEL_DIR}/KernelSU-Next/kernel/Kconfig"
+  for candidate in \
+    "${KERNEL_DIR}/KernelSU/kernel/Kconfig" \
+    "${KERNEL_DIR}/KernelSU-Next/kernel/Kconfig"
   do
     if [[ -f "${candidate}" ]]; then
-      printf '%s
-' "${candidate}"
+      printf '%s\n' "${candidate}"
       return 0
     fi
   done
@@ -264,11 +304,10 @@ apply_susfs() {
   git -C "${susfs_dir}" checkout -q --detach FETCH_HEAD
   git -C "${susfs_dir}" rev-parse HEAD > "${RELEASE}/susfs-commit.txt"
   log "SUSFS $(cat "${RELEASE}/susfs-commit.txt") from ${SUSFS_BRANCH}"
-  
+
   local kconfig manager_root
   kconfig="$(kconfig_path)" || die "SUSFS needs the manager Kconfig"
   manager_root="$(dirname "$(dirname "${kconfig}")")"
-  
   if ! grep -q '^config KSU_SUSFS$' "${kconfig}"; then
     local hook="${susfs_dir}/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch"
     if ! apply_patch "${manager_root}" "${hook}"; then
@@ -288,14 +327,13 @@ apply_susfs() {
   else
     log "Manager already has KSU_SUSFS; skipping 10_enable_susfs_for_ksu.patch"
   fi
-  
+
   local kernel_patch="${susfs_dir}/kernel_patches/50_add_susfs_in_gki-${SUSFS_BRANCH#gki-}.patch"
   if grep -q 'susfs\.o' "${KERNEL_DIR}/fs/Makefile"; then
     log "Kernel already references susfs.o; skipping the kernel SUSFS patch"
   elif ! apply_patch "${KERNEL_DIR}" "${kernel_patch}"; then
     die "SUSFS kernel patch failed for ${SUSFS_BRANCH}. Check ${kernel_patch}"
   fi
-  
   cp -a "${susfs_dir}/kernel_patches/fs/." "${KERNEL_DIR}/fs/"
   cp -a "${susfs_dir}/kernel_patches/include/linux/." "${KERNEL_DIR}/include/linux/"
   if [[ -f "${susfs_dir}/kernel_patches/include/linux/susfs.h" ]]; then
@@ -328,7 +366,6 @@ make_kernel() {
   export SUBARCH="${ARCH}"
   export KBUILD_BUILD_USER KBUILD_BUILD_HOST
   export PATH="${TOOLCHAIN_BIN}:${PATH}"
-  
   local cc="clang"
   if [[ "${USE_CCACHE}" == "true" ]] && command -v ccache >/dev/null 2>&1; then
     export CCACHE_DIR="${CCACHE_DIR:-${HOME}/.ccache}"
@@ -339,18 +376,18 @@ make_kernel() {
     ccache -z || true
     cc="ccache clang"
   fi
-  
+
   local jobs
   jobs="${JOBS:-$(nproc)}"
-  if [[ -z "${JOBS_FORCE:-}" && "${TOOLCHAIN}" == "llvm-23.1.1" && "${jobs}" -gt 2 ]]; then
+  if [[ -z "${JOBS_FORCE:-}" && "${TOOLCHAIN}" == "llvm-23.1.5" && "${jobs}" -gt 2 ]]; then
     log "Capping jobs from ${jobs} to 2 for ${TOOLCHAIN}"
     jobs=2
   fi
-  
+
   local out="${KERNEL_DIR}/out"
   mkdir -p "${out}"
   local common=(O="${out}" ARCH="${ARCH}" LLVM=1 LLVM_IAS=1 CC="${cc}")
-  
+
   case "${DEFCONFIG_MODE}" in
     single)
       [[ -n "${DEFCONFIG_SINGLE}" ]] || die "single defconfig mode needs a defconfig name"
@@ -373,7 +410,7 @@ make_kernel() {
       die "Bad DEFCONFIG_MODE ${DEFCONFIG_MODE}"
       ;;
   esac
-  
+
   local cfg=(scripts/config --file "${out}/.config")
   if [[ "${MANAGER}" != "none" ]]; then
     ( cd "${KERNEL_DIR}" && "${cfg[@]}" -e KSU )
@@ -398,9 +435,8 @@ make_kernel() {
       ( cd "${KERNEL_DIR}" && "${cfg[@]}" -d LTO_NONE -d LTO_CLANG_NONE -d LTO_CLANG_THIN -e LTO_CLANG -e LTO_CLANG_FULL ) || true
       ;;
   esac
-  
+
   make -C "${KERNEL_DIR}" "${common[@]}" olddefconfig
-  
   if [[ "${MANAGER}" != "none" ]] && ! grep -Eq '^(CONFIG_KSU=y|CONFIG_KSU=m)$' "${out}/.config"; then
     die "CONFIG_KSU did not stay enabled"
   fi
@@ -410,7 +446,7 @@ make_kernel() {
   if [[ "${NOMOUNT}" == "builtin" ]] && ! grep -q '^CONFIG_NOMOUNT=y$' "${out}/.config"; then
     die "CONFIG_NOMOUNT=y did not stay enabled"
   fi
-  
+
   if [[ "${LTO}" == "thin" ]]; then
     local wrapper="${RELEASE}/ld-thinlto-wrapper" jobs_lto="${THINLTO_JOBS:-2}"
     local cache="${HOME}/.cache/thinlto"
@@ -423,13 +459,13 @@ EOF
     export LD="${wrapper}" HOSTLD="${wrapper}"
     log "ThinLTO jobs=${jobs_lto}"
   fi
-  
+
   local targets=(Image)
   if [[ "${BUILD_SCOPE}" == "full" ]]; then
     targets+=(modules dtbs)
   fi
   make -C "${KERNEL_DIR}" -j"${jobs}" "${common[@]}" "${targets[@]}"
-  
+
   local image=""
   for candidate in Image Image.gz Image.gz-dtb; do
     if [[ -s "${out}/arch/${ARCH}/boot/${candidate}" ]]; then
@@ -438,17 +474,16 @@ EOF
     fi
   done
   [[ -n "${image}" ]] || die "No Image under ${out}/arch/${ARCH}/boot"
-  
   local bytes
   bytes="$(stat -c%s "${image}")"
   [[ "${bytes}" -gt 2000000 ]] || die "Image is unexpectedly small (${bytes} bytes)"
   cp -f "${image}" "${RELEASE}/$(basename "${image}")"
   log "Image ${bytes} bytes"
-  
+
   if [[ "${BUILD_SCOPE}" == "full" ]]; then
     build_techpack "${cc}" "${jobs}" "${out}"
   fi
-  
+
   if [[ "${NOMOUNT}" == "lkm" ]]; then
     log "Building NoMount as an LKM"
     make -C "${KERNEL_DIR}" "${common[@]}" modules_prepare
@@ -458,11 +493,13 @@ EOF
     [[ -n "${ko}" ]] || die "nomount.ko was not produced"
     cp -f "${ko}" "${RELEASE}/nomount.ko"
     cat > "${RELEASE}/nomount-lkm.txt" <<'EOF'
-nomount.ko matches this kernel only. Put it in the lkm/ directory of the NoMount module zip (https://github.com/maxsteeel/nomount/releases) and flash that module from KernelSU or APatch.
-The boot image does not contain NoMount.
+nomount.ko matches this kernel only.
+Put it in the lkm/ directory of the NoMount module zip
+(https://github.com/maxsteeel/nomount/releases) and flash that module
+from KernelSU or APatch. The boot image does not contain NoMount.
 EOF
   fi
-  
+
   if [[ "${BUILD_SCOPE}" == "full" || "${NOMOUNT}" == "lkm" ]]; then
     local ko_roots=("${out}")
     if [[ -n "${MODULES_SRC}" && -d "${KERNEL_DIR}/${MODULES_SRC}" ]]; then
@@ -478,7 +515,7 @@ EOF
       find "${out}/arch/${ARCH}/boot/dts" -name '*.dtb' -print0 | tar --null -T - -czf "${RELEASE}/dtbs.tar.gz"
     fi
   fi
-  
+
   if [[ "${USE_CCACHE}" == "true" ]] && command -v ccache >/dev/null 2>&1; then
     ccache -s > "${RELEASE}/ccache-stats.txt" || true
   fi
@@ -502,7 +539,8 @@ build_techpack() {
       continue
     fi
     log "Techpack ${module}"
-    make -C "${KERNEL_DIR}" -j"${jobs}" O="${out}" ARCH="${ARCH}" LLVM=1 LLVM_IAS=1 CC="${cc}"       M="${src}/${module}" KERNEL_SRC="${KERNEL_DIR}" OUT_DIR="${out}" modules
+    make -C "${KERNEL_DIR}" -j"${jobs}" O="${out}" ARCH="${ARCH}" LLVM=1 LLVM_IAS=1 CC="${cc}" \
+      M="${src}/${module}" KERNEL_SRC="${KERNEL_DIR}" OUT_DIR="${out}" modules
   done < "${ROOT}/${MODULES_LIST}"
 }
 
@@ -510,47 +548,41 @@ package_zip() {
   local ak="${ROOT}/ak3-work"
   rm -rf "${ak}"
   clone_ref "${ANYKERNEL_REPO}" "${ak}" "${ANYKERNEL_REF}"
-  
   local susfs_tag="nosusfs" nm_tag="nm-${NOMOUNT}"
   [[ "${ENABLE_SUSFS}" == "true" ]] && susfs_tag="susfs"
   local version
   version="$(tr -d '\n' < "${RELEASE}/susfs-version.txt" 2>/dev/null || true)"
   local string="${DEVICE} ${SOURCE_DISPLAY} ${MANAGER_DISPLAY} ${susfs_tag} ${nm_tag}"
   [[ -n "${version}" ]] && string="${string} ${version}"
-  
-  sed     -e "s|__KERNEL_STRING__|${string}|"     -e "s|__DEVICE_NAME_1__|${DEVICE_NAME_1}|"     -e "s|__DEVICE_NAME_2__|${DEVICE_NAME_2}|"     "${ROOT}/ak3/anykernel.sh" > "${ak}/anykernel.sh"
-  
+  sed \
+    -e "s|__KERNEL_STRING__|${string}|" \
+    -e "s|__DEVICE_NAME_1__|${DEVICE_NAME_1}|" \
+    -e "s|__DEVICE_NAME_2__|${DEVICE_NAME_2}|" \
+    "${ROOT}/ak3/anykernel.sh" > "${ak}/anykernel.sh"
   if [[ -z "${DEVICE_NAME_2}" ]]; then
     sed -i '/^device.name2=/d' "${ak}/anykernel.sh"
   fi
-  
   local image
   image="$(find "${RELEASE}" -maxdepth 1 -type f \( -name 'Image' -o -name 'Image.gz' -o -name 'Image.gz-dtb' \) -print -quit)"
   cp -f "${image}" "${ak}/"
-  
   rm -rf "${ak}/.git" "${ak}/README.md" "${ak}/"*.placeholder
-  
   local run="${GITHUB_RUN_NUMBER:-local}"
   local name="${DEVICE}-${SOURCE_KEY}-${MANAGER}-${susfs_tag}-${nm_tag}-r${run}.zip"
   (
     cd "${ak}"
     zip -r9 "${RELEASE}/${name}" . -x '.git/*'
   )
-  
   ( cd "${RELEASE}" && sha256sum "${name}" > "${name}.sha256" )
-  
   if [[ -f "${RELEASE}/nomount.ko" ]]; then
     cp -f "${RELEASE}/nomount.ko" "${RELEASE}/${name%.zip}-nomount.ko"
   fi
-  
   cat > "${RELEASE}/build-info.txt" <<EOF
 device: ${DEVICE} (${DEVICE_NAME_1} ${DEVICE_NAME_2})
 source: ${SOURCE_DISPLAY} [${SOURCE_KEY}] ${ROM_LABEL}
 fetch: ${FETCH}
 kernel: ${KERNEL_REPO:-${MANIFEST_REPO}} @ ${KERNEL_REF:-${MANIFEST_REF}}
 kernel_commit: $(cat "${RELEASE}/kernel-commit.txt" 2>/dev/null || echo unknown)
-manager: ${MANAGER_DISPLAY}
-${MANAGER_REPO}@${MANAGER_REF}
+manager: ${MANAGER_DISPLAY} ${MANAGER_REPO}@${MANAGER_REF}
 susfs: ${ENABLE_SUSFS} ${SUSFS_BRANCH} ${SUSFS_REF:-HEAD} $(cat "${RELEASE}/susfs-version.txt" 2>/dev/null || true)
 susfs_commit: $(cat "${RELEASE}/susfs-commit.txt" 2>/dev/null || echo n/a)
 nomount: ${NOMOUNT} ${NOMOUNT_REF}
@@ -560,14 +592,13 @@ scope: ${BUILD_SCOPE}
 zip: ${name}
 EOF
   log "Packaged ${name}"
-  
   if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
     {
       echo "### ${name}"
       echo
-      echo '\`\`\`'
+      echo '```'
       cat "${RELEASE}/build-info.txt"
-      echo '\`\`\`'
+      echo '```'
     } >> "${GITHUB_STEP_SUMMARY}"
   fi
 }
@@ -581,5 +612,4 @@ apply_susfs
 apply_nomount
 make_kernel
 package_zip
-
 log "Done"
