@@ -76,12 +76,13 @@ python3 "${ROOT}/scripts/plan.py" write-plan \
 # shellcheck disable=SC1091
 source "${RELEASE}/plan.env"
 
-# Full LTO links vmlinux.o in one process and needs far more than the 16 GB of a hosted runner.
-# The kernel linker gets killed and the runner drops the job, so fall back to ThinLTO.
+# Full LTO links vmlinux.o in one process and needs about 30 GB of RAM plus swap.
+# With less, the linker gets killed and the runner drops the job, so fall back to ThinLTO.
+# The workflow adds a 16 GB swap file, which brings a 16 GB hosted runner over the limit.
 if [[ "${LTO}" == "full" ]]; then
-  mem_kb="$(awk '/^MemTotal:/ {print $2}' /proc/meminfo 2>/dev/null || echo 0)"
+  mem_kb="$(awk '/^(MemTotal|SwapTotal):/ {sum += $2} END {print sum + 0}' /proc/meminfo 2>/dev/null || echo 0)"
   if (( mem_kb < 30 * 1024 * 1024 )); then
-    log "::warning::LTO=full needs about 32 GB of RAM (this machine has $((mem_kb / 1024 / 1024)) GB). Using thin instead."
+    log "::warning::LTO=full needs about 30 GB of RAM plus swap (this machine has $((mem_kb / 1024 / 1024)) GB). Using thin instead."
     LTO="thin"
   fi
 fi
