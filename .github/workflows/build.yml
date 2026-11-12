@@ -57,6 +57,13 @@ on:
           - sukisu-ultra
           - resukisu
           - all
+      ksu_mode:
+        description: "builtin compiles the manager into the Image. lkm builds kernelsu.ko and leaves the Image without it (official KernelSU only, no SUSFS)."
+        type: choice
+        default: builtin
+        options:
+          - builtin
+          - lkm
       manager_ref:
         description: "Override the manager branch, tag, or commit"
         type: string
@@ -94,7 +101,7 @@ on:
           - android-r596125
           - llvm-23.1.5
       lto:
-        description: "thin is the safe default on GitHub-hosted runners"
+        description: "thin is the safe default. full needs about 32 GB RAM, so hosted runners fall back to thin."
         type: choice
         default: thin
         options:
@@ -146,6 +153,7 @@ jobs:
           CUSTOM_REF: ${{ inputs.custom_ref }}
           CUSTOM_FETCH: ${{ inputs.custom_fetch }}
           MANAGER: ${{ inputs.manager }}
+          KSU_MODE: ${{ inputs.ksu_mode }}
         run: bash scripts/build.sh
 
   build:
@@ -197,6 +205,7 @@ jobs:
           CUSTOM_KERNEL_PATH: ${{ inputs.custom_kernel_path }}
           MANAGER: ${{ matrix.manager }}
           MANAGER_REF: ${{ inputs.manager_ref }}
+          KSU_MODE: ${{ inputs.ksu_mode }}
           ENABLE_SUSFS: ${{ inputs.enable_susfs }}
           SUSFS_REF: ${{ inputs.susfs_ref }}
           SUSFS_BRANCH: ${{ inputs.susfs_branch }}
@@ -236,7 +245,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          mapfile -t files < <(find artifacts -type f \( -name '*.zip' -o -name '*.sha256' -o -name '*-nomount.ko' \))
+          mapfile -t files < <(find artifacts -type f \( -name '*.zip' -o -name '*.sha256' -o -name '*.ko' \))
           if (( ${#files[@]} == 0 )); then
             echo "::error::No zip files were produced"
             exit 1
