@@ -4,15 +4,15 @@ on:
   workflow_dispatch:
     inputs:
       device:
-        description: "Target device"
+        description: "Device. Add a config/devices/<name>.env file, then add the name here."
         type: choice
         default: marble
         options:
           - marble
       kernel_source:
-        description: "Select kernel source preset"
+        description: "Kernel source. Matches a key in config/sources.json, or custom."
         type: choice
-        default: aosp
+        default: aospa
         options:
           - aospa
           - aosp
@@ -47,7 +47,7 @@ on:
         type: string
         default: ""
       manager:
-        description: "Select root manager"
+        description: "Root manager. all builds every manager in config/managers.json."
         type: choice
         default: kernelsu
         options:
