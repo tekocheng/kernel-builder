@@ -544,4 +544,68 @@ package_zip() {
   local ak="${ROOT}/ak3-work"
   rm -rf "${ak}"
   clone_ref "${ANYKERNEL_REPO}" "${ak}" "${ANYKERNEL_REF}"
-  local susfs_tag="nos
+  local susfs_tag="nosusfs" nm_tag="nm-${NOMOUNT}"
+  [[ "${ENABLE_SUSFS}" == "true" ]] && susfs_tag="susfs"
+  local version
+  version="$(tr -d '\n' < "${RELEASE}/susfs-version.txt" 2>/dev/null || true)"
+  local string="${DEVICE} ${SOURCE_DISPLAY} ${MANAGER_DISPLAY} ${susfs_tag} ${nm_tag}"
+  [[ -n "${version}" ]] && string="${string} ${version}"
+  sed \
+    -e "s|__KERNEL_STRING__|${string}|" \
+    -e "s|__DEVICE_NAME_1__|${DEVICE_NAME_1}|" \
+    -e "s|__DEVICE_NAME_2__|${DEVICE_NAME_2}|" \
+    "${ROOT}/ak3/anykernel.sh" > "${ak}/anykernel.sh"
+  if [[ -z "${DEVICE_NAME_2}" ]]; then
+    sed -i '/^device.name2=/d' "${ak}/anykernel.sh"
+  fi
+  local image
+  image="$(find "${RELEASE}" -maxdepth 1 -type f \( -name 'Image' -o -name 'Image.gz' -o -name 'Image.gz-dtb' \) -print -quit)"
+  cp -f "${image}" "${ak}/"
+  rm -rf "${ak}/.git" "${ak}/README.md" "${ak}/"*.placeholder
+  local run="${GITHUB_RUN_NUMBER:-local}"
+  local name="${DEVICE}-${SOURCE_KEY}-${MANAGER}-${susfs_tag}-${nm_tag}-r${run}.zip"
+  (
+    cd "${ak}"
+    zip -r9 "${RELEASE}/${name}" . -x '.git/*'
+  )
+  ( cd "${RELEASE}" && sha256sum "${name}" > "${name}.sha256" )
+  if [[ -f "${RELEASE}/nomount.ko" ]]; then
+    cp -f "${RELEASE}/nomount.ko" "${RELEASE}/${name%.zip}-nomount.ko"
+  fi
+  cat > "${RELEASE}/build-info.txt" <<EOF
+device: ${DEVICE} (${DEVICE_NAME_1} ${DEVICE_NAME_2})
+source: ${SOURCE_DISPLAY} [${SOURCE_KEY}] ${ROM_LABEL}
+fetch: ${FETCH}
+kernel: ${KERNEL_REPO:-${MANIFEST_REPO}} @ ${KERNEL_REF:-${MANIFEST_REF}}
+kernel_commit: $(cat "${RELEASE}/kernel-commit.txt" 2>/dev/null || echo unknown)
+manager: ${MANAGER_DISPLAY} ${MANAGER_REPO}@${MANAGER_REF}
+susfs: ${ENABLE_SUSFS} ${SUSFS_BRANCH} ${SUSFS_REF:-HEAD} $(cat "${RELEASE}/susfs-version.txt" 2>/dev/null || true)
+susfs_commit: $(cat "${RELEASE}/susfs-commit.txt" 2>/dev/null || echo n/a)
+nomount: ${NOMOUNT} ${NOMOUNT_REF}
+toolchain: ${TOOLCHAIN}
+lto: ${LTO}
+scope: ${BUILD_SCOPE}
+zip: ${name}
+EOF
+  log "Packaged ${name}"
+  if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
+    {
+      echo "### ${name}"
+      echo
+      echo '```'
+      cat "${RELEASE}/build-info.txt"
+      echo '```'
+    } >> "${GITHUB_STEP_SUMMARY}"
+  fi
+}
+
+install_deps
+fetch_tree
+resolve_defconfig_if_auto
+fetch_toolchain
+apply_manager
+apply_susfs
+apply_nomount
+make_kernel
+package_zip
+log "Done"
