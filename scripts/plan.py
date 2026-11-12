@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """Resolve builder inputs into a shell env file, a fetch list, or a Actions matrix.
-
-Adding a kernel is a block in config/sources.json. Adding a device is
-config/devices/<name>.env. This file does not need a workflow edit.
+Adding a kernel is a block in config/sources.json.
+Adding a device is config/devices/<name>.env.
+This file does not need a workflow edit.
 """
-
 from __future__ import annotations
 
 import argparse
@@ -15,6 +14,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+
 SOURCES = json.loads((ROOT / "config" / "sources.json").read_text(encoding="utf-8"))
 MANAGERS = json.loads((ROOT / "config" / "managers.json").read_text(encoding="utf-8"))
 
@@ -29,6 +29,7 @@ def load_device(name: str) -> dict[str, str]:
     if not path.is_file():
         known = ", ".join(sorted(p.stem for p in (ROOT / "config" / "devices").glob("*.env")))
         die(f"Unknown device '{name}'. Known devices: {known}")
+
     env: dict[str, str] = {}
     for raw in path.read_text(encoding="utf-8").splitlines():
         line = raw.split("#", 1)[0].strip()
@@ -57,7 +58,7 @@ def source_entry(key: str, args: argparse.Namespace) -> dict:
             "rom": repo,
             "fetch": fetch,
             "defconfig_mode": "auto",
-            "toolchain": "llvm-22.1.8",
+            "toolchain": "llvm-23.1.1",
             "kernel_path": args.custom_kernel_path.strip(),
             "manifest_skip": ["prebuilts/clang", "prebuilts-master", "gcc/linux-x86"],
         }
@@ -71,6 +72,7 @@ def source_entry(key: str, args: argparse.Namespace) -> dict:
             entry["manifest_file"] = "default.xml"
             entry["kernel_path"] = entry["kernel_path"] or "kernel_platform/xiaomi/sm8450"
         return entry
+
     if key not in SOURCES:
         die(f"Unknown kernel source '{key}'. Known: {', '.join(SOURCES)} or custom")
     return SOURCES[key]
@@ -91,12 +93,15 @@ def resolve_manager(name: str, susfs: bool, manager_ref: str) -> dict[str, str]:
             "MANAGER_SUSFS_FALLBACK_REF": "",
             "ENABLE_SUSFS": "false",
         }
+
     ref = manager_ref.strip()
     if not ref:
         ref = entry.get("susfs_ref") if susfs and entry.get("susfs_ref") else entry.get("ref", "")
+
     enabled = "true" if susfs and entry.get("susfs", False) else "false"
     if susfs and not entry.get("susfs", False):
         print(f"::warning::{entry['display']} has no SUSFS support; building without it", file=sys.stderr)
+
     return {
         "MANAGER": name,
         "MANAGER_DISPLAY": entry["display"],
@@ -120,17 +125,21 @@ def write_plan(args: argparse.Namespace) -> None:
     entry = source_entry(args.kernel_source, args)
     susfs = truthy(args.susfs)
     manager = resolve_manager(args.manager, susfs, args.manager_ref)
+
     mode = entry.get("defconfig_mode", "auto")
     toolchain = args.toolchain.strip() or "auto"
     if toolchain == "auto":
-        toolchain = entry.get("toolchain") or "llvm-22.1.8"
-    if toolchain not in {"android-r416183b", "llvm-22.1.8"}:
-        die(f"Unsupported toolchain '{toolchain}'. Use auto, android-r416183b, or llvm-22.1.8")
+        toolchain = entry.get("toolchain") or "llvm-23.1.1"
+    if toolchain not in {"android-r596125", "llvm-23.1.1"}:
+        die(f"Unsupported toolchain '{toolchain}'. Use auto, android-r596125, or llvm-23.1.1")
+
     nomount = args.nomount.strip() or "off"
     if nomount not in {"off", "builtin", "lkm"}:
         die("nomount must be off, builtin, or lkm")
+
     if args.lto not in {"none", "thin", "full"}:
         die("lto must be none, thin, or full")
+
     if args.build_scope not in {"image-only", "full"}:
         die("build_scope must be image-only or full")
 
@@ -175,10 +184,12 @@ def write_plan(args: argparse.Namespace) -> None:
         "KBUILD_BUILD_HOST": device.get("KBUILD_BUILD_HOST", "github-actions"),
         "USE_CCACHE": "true" if truthy(args.ccache) else "false",
     }
+
     # Manifest ref override moves the manifest checkout, not only the kernel project.
     # The kernel project revision is overridden separately via SOURCE_REF_OVERRIDE.
     if entry.get("fetch") == "manifest" and args.source_ref.strip() and args.kernel_source == "custom":
         values["MANIFEST_REF"] = args.source_ref.strip()
+
     values.update(manager)
 
     out = Path(args.out)
@@ -199,6 +210,7 @@ def write_plan(args: argparse.Namespace) -> None:
             die(f"extra repo entry for {args.kernel_source} needs repo, ref, and dest")
         rows.append(f"{repo}\t{ref}\t{dest}")
     extra_path.write_text("\n".join(rows) + ("\n" if rows else ""), encoding="utf-8")
+
     print(f"Wrote {out}")
 
 
@@ -208,6 +220,7 @@ def parse_manifest(xml_path: Path, skip: list[str], kernel_path: str, kernel_ref
     default_remote = ""
     default_rev = ""
     seen_kernel = False
+
     for child in list(root):
         tag = child.tag.split("}", 1)[-1]
         if tag == "remote":
@@ -221,24 +234,31 @@ def parse_manifest(xml_path: Path, skip: list[str], kernel_path: str, kernel_ref
             remote = child.get("remote") or default_remote
             rev = child.get("revision") or default_rev
             fetch = remotes.get(remote, "")
+
             if "github.com" not in fetch:
                 continue
+
             blob = f"{path} {name}"
             if any(part and part in blob for part in skip):
                 print(f"skip {path}", file=sys.stderr)
                 continue
+
             if not fetch.endswith("/"):
                 fetch += "/"
             url = fetch + name
             if not url.endswith(".git"):
                 url += ".git"
+
             if kernel_path and path == kernel_path:
                 seen_kernel = True
                 if kernel_ref:
                     rev = kernel_ref
+
             if not rev:
                 die(f"Manifest project {name} has no revision")
+
             print(f"{url}\t{rev}\t{path}")
+
     if kernel_path and not seen_kernel:
         die(f"Manifest has no GitHub project at path {kernel_path}")
 
@@ -251,16 +271,21 @@ def emit_matrix(args: argparse.Namespace) -> None:
     else:
         source_entry(args.kernel_source, args)
         sources = [args.kernel_source]
+
     managers = list(MANAGERS) if args.manager == "all" else [args.manager]
     if args.manager != "all" and args.manager not in MANAGERS:
         die(f"Unknown manager '{args.manager}'. Known: {', '.join(MANAGERS)} or all")
+
     load_device(args.device)
+
     include = [{"source": source, "manager": manager} for source in sources for manager in managers]
     payload = json.dumps({"include": include}, separators=(",", ":"))
+
     if args.github_output:
         delimiter = "MATRIX_JSON"
         with open(args.github_output, "a", encoding="utf-8") as handle:
             handle.write(f"matrix<<{delimiter}\n{payload}\n{delimiter}\n")
+
     print(payload)
 
 
@@ -308,15 +333,18 @@ def build_parser() -> argparse.ArgumentParser:
     matrix.add_argument("--all-sources", default="false")
     matrix.add_argument("--github-output", default="")
     matrix.set_defaults(func=emit_matrix)
+
     return parser
 
 
 def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
+
     if args.cmd == "manifest":
         parse_manifest(Path(args.xml), args.skip.split(), args.kernel_path, args.kernel_ref)
         return
+
     args.func(args)
 
 
