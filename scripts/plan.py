@@ -76,7 +76,7 @@ def source_entry(key: str, args: argparse.Namespace) -> dict:
     return SOURCES[key]
 
 
-def resolve_manager(name: str, susfs: bool, manager_ref: str) -> dict[str, str]:
+def resolve_manager(name: str, susfs: bool, manager_ref: str, ksu_mode: str = "builtin") -> dict[str, str]:
     if name not in MANAGERS:
         die(f"Unknown manager '{name}'. Known: {', '.join(MANAGERS)} or all")
     entry = MANAGERS[name]
@@ -91,6 +91,12 @@ def resolve_manager(name: str, susfs: bool, manager_ref: str) -> dict[str, str]:
             "MANAGER_SUSFS_FALLBACK_REF": "",
             "ENABLE_SUSFS": "false",
         }
+    if ksu_mode == "lkm":
+        if not entry.get("lkm", False):
+            die(f"{entry['display']} has no LKM build recipe. Use ksu_mode=builtin or manager=kernelsu")
+        if susfs:
+            print("::warning::SUSFS is not combined with the LKM build; building without it", file=sys.stderr)
+            susfs = False
     ref = manager_ref.strip()
     if not ref:
         ref = entry.get("susfs_ref") if susfs and entry.get("susfs_ref") else entry.get("ref", "")
@@ -119,7 +125,12 @@ def write_plan(args: argparse.Namespace) -> None:
     device = load_device(args.device)
     entry = source_entry(args.kernel_source, args)
     susfs = truthy(args.susfs)
-    manager = resolve_manager(args.manager, susfs, args.manager_ref)
+    ksu_mode = args.ksu_mode.strip() or "builtin"
+    if ksu_mode not in {"builtin", "lkm"}:
+        die("ksu_mode must be builtin or lkm")
+    if ksu_mode == "lkm" and args.manager == "none":
+        die("ksu_mode=lkm needs a root manager")
+    manager = resolve_manager(args.manager, susfs, args.manager_ref, ksu_mode)
     mode = entry.get("defconfig_mode", "auto")
     toolchain = args.toolchain.strip() or "auto"
     if toolchain == "auto":
@@ -174,6 +185,7 @@ def write_plan(args: argparse.Namespace) -> None:
         "KBUILD_BUILD_USER": device.get("KBUILD_BUILD_USER", args.device),
         "KBUILD_BUILD_HOST": device.get("KBUILD_BUILD_HOST", "github-actions"),
         "USE_CCACHE": "true" if truthy(args.ccache) else "false",
+        "KSU_MODE": ksu_mode if args.manager != "none" else "builtin",
     }
     # Manifest ref override moves the manifest checkout, not only the kernel project.
     # The kernel project revision is overridden separately via SOURCE_REF_OVERRIDE.
@@ -254,6 +266,11 @@ def emit_matrix(args: argparse.Namespace) -> None:
     managers = list(MANAGERS) if args.manager == "all" else [args.manager]
     if args.manager != "all" and args.manager not in MANAGERS:
         die(f"Unknown manager '{args.manager}'. Known: {', '.join(MANAGERS)} or all")
+    if args.ksu_mode == "lkm":
+        # Only managers with an LKM recipe can run in this mode.
+        managers = [name for name in managers if name != "none" and MANAGERS[name].get("lkm", False)]
+        if not managers:
+            die(f"ksu_mode=lkm is not available for manager '{args.manager}'. Use kernelsu or all")
     load_device(args.device)
     include = [{"source": source, "manager": manager} for source in sources for manager in managers]
     payload = json.dumps({"include": include}, separators=(",", ":"))
@@ -278,6 +295,7 @@ def build_parser() -> argparse.ArgumentParser:
     plan.add_argument("--custom-kernel-path", default="")
     plan.add_argument("--manager", default="kernelsu")
     plan.add_argument("--manager-ref", default="")
+    plan.add_argument("--ksu-mode", default="builtin")
     plan.add_argument("--susfs", default="true")
     plan.add_argument("--susfs-ref", default="")
     plan.add_argument("--susfs-branch", default="")
@@ -305,6 +323,7 @@ def build_parser() -> argparse.ArgumentParser:
     matrix.add_argument("--source-ref", default="")
     matrix.add_argument("--custom-fetch", default="git")
     matrix.add_argument("--manager", default="kernelsu")
+    matrix.add_argument("--ksu-mode", default="builtin")
     matrix.add_argument("--all-sources", default="false")
     matrix.add_argument("--github-output", default="")
     matrix.set_defaults(func=emit_matrix)
@@ -322,3 +341,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+    
