@@ -1,0 +1,7 @@
+src/
+release/
+android-clang/
+llvm-*/
+ak3-work/
+*.rej
+.cache/
