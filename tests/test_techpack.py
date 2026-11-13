@@ -65,10 +65,11 @@ class TechpackWrapperTests(unittest.TestCase):
         self.assertIn(f"O={self.out}", output)
         self.assertIn("Techpack wrapper:", completed.stdout)
 
-    def test_parent_wrapper_builds_nested_qcacld_profile(self):
+    def test_parent_wrapper_preserves_hidden_symlink_wlan_profile(self):
         wrapper = self.modules / "wlan" / "qcacld-3.0"
+        wrapper.mkdir(parents=True)
         module = wrapper / ".qca6490"
-        module.mkdir(parents=True)
+        module.symlink_to(".", target_is_directory=True)
         (wrapper / "Makefile").write_text(
             "KERNEL_SRC ?= /lib/modules/build\n"
             "M ?= $(shell pwd)\n"
@@ -82,13 +83,14 @@ class TechpackWrapperTests(unittest.TestCase):
             "\t@printf 'M=%s\\nWLAN_ROOT=%s\\n' '$(M)' '$(WLAN_ROOT)' > \"$(TECHPACK_TEST_RESULT)\"\n"
         )
 
-        result_file = self.base / "result-parent.txt"
+        result_file = self.base / "result-wlan.txt"
         completed = self._run_helper(module, result_file)
         output = result_file.read_text()
         expected_m = os.path.relpath(module, self.kernel)
         self.assertIn(f"M={expected_m}", output)
+        self.assertTrue(expected_m.endswith("/qcacld-3.0/.qca6490"))
         wlan_root = next(line.split("=", 1)[1] for line in output.splitlines() if line.startswith("WLAN_ROOT="))
-        self.assertEqual(Path(wlan_root).resolve(), module.resolve())
+        self.assertTrue(wlan_root.endswith("/qcacld-3.0/.qca6490"))
         self.assertIn("target=all", completed.stdout)
 
     def test_direct_kbuild_fallback_keeps_absolute_module_path(self):
