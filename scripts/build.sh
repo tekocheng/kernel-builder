@@ -7,6 +7,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${ROOT}"
 
 DEVICE="${DEVICE:-marble}"
+KERNEL_NAME="${KERNEL_NAME:-}"
 KERNEL_SOURCE="${KERNEL_SOURCE:-aosp}"
 SOURCE_REF="${SOURCE_REF:-}"
 CUSTOM_REPO="${CUSTOM_REPO:-}"
@@ -15,11 +16,10 @@ CUSTOM_FETCH="${CUSTOM_FETCH:-git}"
 CUSTOM_KERNEL_PATH="${CUSTOM_KERNEL_PATH:-}"
 MANAGER="${MANAGER:-kernelsu}"
 MANAGER_REF="${MANAGER_REF:-}"
-KSU_MODE="${KSU_MODE:-builtin}"
 ENABLE_SUSFS="${ENABLE_SUSFS:-true}"
 SUSFS_REF="${SUSFS_REF:-}"
 SUSFS_BRANCH="${SUSFS_BRANCH:-}"
-NOMOUNT="${NOMOUNT:-off}"
+ENABLE_NOMOUNT="${ENABLE_NOMOUNT:-${NOMOUNT:-false}}"
 NOMOUNT_REF="${NOMOUNT_REF:-}"
 TOOLCHAIN="${TOOLCHAIN:-auto}"
 LTO="${LTO:-thin}"
@@ -44,7 +44,6 @@ if [[ -n "${GITHUB_OUTPUT:-}" && "${MATRIX_ONLY:-}" == "1" ]]; then
     --custom-ref "${CUSTOM_REF}" \
     --custom-fetch "${CUSTOM_FETCH}" \
     --manager "${MANAGER}" \
-    --ksu-mode "${KSU_MODE}" \
     --all-sources "${ALL_SOURCES}" \
     --github-output "${GITHUB_OUTPUT}"
   exit 0
@@ -52,6 +51,7 @@ fi
 
 python3 "${ROOT}/scripts/plan.py" write-plan \
   --device "${DEVICE}" \
+  --kernel-name "${KERNEL_NAME}" \
   --kernel-source "${KERNEL_SOURCE}" \
   --source-ref "${SOURCE_REF}" \
   --custom-repo "${CUSTOM_REPO}" \
@@ -60,11 +60,10 @@ python3 "${ROOT}/scripts/plan.py" write-plan \
   --custom-kernel-path "${CUSTOM_KERNEL_PATH}" \
   --manager "${MANAGER}" \
   --manager-ref "${MANAGER_REF}" \
-  --ksu-mode "${KSU_MODE}" \
   --susfs "${ENABLE_SUSFS}" \
   --susfs-ref "${SUSFS_REF}" \
   --susfs-branch "${SUSFS_BRANCH}" \
-  --nomount "${NOMOUNT}" \
+  --nomount "${ENABLE_NOMOUNT}" \
   --nomount-ref "${NOMOUNT_REF}" \
   --toolchain "${TOOLCHAIN}" \
   --toolchain-url "${TOOLCHAIN_URL}" \
@@ -76,9 +75,6 @@ python3 "${ROOT}/scripts/plan.py" write-plan \
 # shellcheck disable=SC1091
 source "${RELEASE}/plan.env"
 
-# Full LTO links vmlinux.o in one process and needs about 30 GB of RAM plus swap.
-# With less, the linker gets killed and the runner drops the job, so fall back to ThinLTO.
-# The workflow adds a 16 GB swap file, which brings a 16 GB hosted runner over the limit.
 if [[ "${LTO}" == "full" ]]; then
   mem_kb="$(awk '/^(MemTotal|SwapTotal):/ {sum += $2} END {print sum + 0}' /proc/meminfo 2>/dev/null || echo 0)"
   if (( mem_kb < 30 * 1024 * 1024 )); then
@@ -87,7 +83,7 @@ if [[ "${LTO}" == "full" ]]; then
   fi
 fi
 
-log "Plan: ${SOURCE_DISPLAY} (${SOURCE_KEY}) ${FETCH} + ${MANAGER_DISPLAY} (${KSU_MODE}) susfs=${ENABLE_SUSFS} nomount=${NOMOUNT} toolchain=${TOOLCHAIN} lto=${LTO} scope=${BUILD_SCOPE}"
+log "Plan: ${SOURCE_DISPLAY} (${SOURCE_KEY}) ${FETCH} + ${MANAGER_DISPLAY} susfs=${ENABLE_SUSFS} nomount=${ENABLE_NOMOUNT} name=${KERNEL_NAME:-default} toolchain=${TOOLCHAIN} lto=${LTO} scope=${BUILD_SCOPE}"
 if [[ "${RESOLVE_ONLY:-}" == "1" ]]; then
   cat "${RELEASE}/plan.env"
   exit 0
@@ -216,7 +212,6 @@ fetch_toolchain() {
     mkdir -p "${tmp}" "$(dirname "${dir}")"
     tar -xf "${archive}" -C "${tmp}"
     rm -f "${archive}"
-    # Archives differ: some have bin/ at the root, some nest it in one folder. Find it.
     local clang_bin
     clang_bin="$(find "${tmp}" -maxdepth 3 \( -type f -o -type l \) -path '*/bin/clang' -print -quit)"
     [[ -n "${clang_bin}" ]] || die "No bin/clang inside ${TOOLCHAIN_URL}"
@@ -246,9 +241,6 @@ setup_manager_from() {
   local repo="$1" ref="$2"
   local url="https://raw.githubusercontent.com/${repo}/${ref}/${MANAGER_SETUP}"
   log "Manager setup ${repo} @ ${ref}"
-  # Some kernel trees list KernelSU as a submodule. A shallow clone leaves an empty
-  # KernelSU/ directory, so setup.sh skips its clone and runs git inside the kernel repo.
-  # Remove the stale directory and symlink so setup.sh starts from a clean state.
   rm -rf "${KERNEL_DIR}/KernelSU" "${KERNEL_DIR}/KernelSU-Next" \
     "${KERNEL_DIR}/drivers/kernelsu" "${KERNEL_DIR}/common/drivers/kernelsu"
   curl -fsSL "${url}" -o "${SRC}/manager-setup.sh"
@@ -278,14 +270,6 @@ apply_patch() {
 apply_manager() {
   if [[ "${MANAGER}" == "none" ]]; then
     log "No root manager"
-    return
-  fi
-  if [[ "${KSU_MODE}" == "lkm" ]]; then
-    # LKM: the kernel tree stays untouched. The manager is only cloned and built later as kernelsu.ko.
-    log "Manager (LKM) ${MANAGER_REPO} @ ${MANAGER_REF}"
-    clone_ref "$(github_url "${MANAGER_REPO}")" "${SRC}/ksu-lkm" "${MANAGER_REF}"
-    [[ -f "${SRC}/ksu-lkm/kernel/Kbuild" ]] || die "No kernel/Kbuild in ${MANAGER_REPO}@${MANAGER_REF}"
-    git -C "${SRC}/ksu-lkm" rev-parse HEAD > "${RELEASE}/manager-commit.txt" || true
     return
   fi
   setup_manager_from "${MANAGER_REPO}" "${MANAGER_REF}"
@@ -347,17 +331,20 @@ apply_susfs() {
 }
 
 apply_nomount() {
-  if [[ "${NOMOUNT}" == "off" ]]; then
+  if [[ "${ENABLE_NOMOUNT}" != "true" ]]; then
     log "NoMount disabled"
     return
   fi
-  local url="${NOMOUNT_REPO%/}/raw/${NOMOUNT_REF}/kernel/setup.sh"
-  # GitHub raw URL, whether NOMOUNT_REPO is a repo URL or already ends without .git.
-  local raw="https://raw.githubusercontent.com/maxsteeel/nomount/${NOMOUNT_REF}/kernel/setup.sh"
-  if [[ "${NOMOUNT_REPO}" != "https://github.com/maxsteeel/nomount" ]]; then
-    raw="${url}"
+  local repo_base="${NOMOUNT_REPO%.git}"
+  repo_base="${repo_base%/}"
+  local raw
+  if [[ "${repo_base}" == https://github.com/* ]]; then
+    local slug="${repo_base#https://github.com/}"
+    raw="https://raw.githubusercontent.com/${slug}/${NOMOUNT_REF}/kernel/setup.sh"
+  else
+    raw="${repo_base}/raw/${NOMOUNT_REF}/kernel/setup.sh"
   fi
-  log "NoMount setup @ ${NOMOUNT_REF} (${NOMOUNT})"
+  log "NoMount setup @ ${NOMOUNT_REF}"
   curl -fsSL "${raw}" -o "${SRC}/nomount-setup.sh"
   (
     cd "${KERNEL_DIR}"
@@ -417,16 +404,24 @@ make_kernel() {
   esac
 
   local cfg=(scripts/config --file "${out}/.config")
-  if [[ "${MANAGER}" != "none" && "${KSU_MODE}" == "builtin" ]]; then
+  if [[ -n "${KERNEL_NAME}" ]]; then
+    local localver="${KERNEL_NAME}"
+    [[ "${localver}" == -* ]] || localver="-${localver}"
+    ( cd "${KERNEL_DIR}" && "${cfg[@]}" --set-str LOCALVERSION "${localver}" -d LOCALVERSION_AUTO ) || true
+    touch "${KERNEL_DIR}/.scmversion" "${out}/.scmversion"
+    log "Kernel localversion: ${localver} (${KBUILD_BUILD_USER}@${KBUILD_BUILD_HOST})"
+  fi
+  if [[ "${MANAGER}" != "none" ]]; then
     ( cd "${KERNEL_DIR}" && "${cfg[@]}" -e KSU )
   fi
   if [[ "${ENABLE_SUSFS}" == "true" ]]; then
     ( cd "${KERNEL_DIR}" && "${cfg[@]}" -e KSU_SUSFS )
   fi
-  case "${NOMOUNT}" in
-    builtin) ( cd "${KERNEL_DIR}" && "${cfg[@]}" -e NOMOUNT ) ;;
-    lkm|off) ( cd "${KERNEL_DIR}" && "${cfg[@]}" -d NOMOUNT ) || true ;;
-  esac
+  if [[ "${ENABLE_NOMOUNT}" == "true" ]]; then
+    ( cd "${KERNEL_DIR}" && "${cfg[@]}" -e NOMOUNT )
+  else
+    ( cd "${KERNEL_DIR}" && "${cfg[@]}" -d NOMOUNT ) || true
+  fi
   case "${LTO}" in
     none)
       ( cd "${KERNEL_DIR}" && "${cfg[@]}" -d LTO_CLANG -d LTO_CLANG_THIN -d LTO_CLANG_FULL -e LTO_NONE ) || true
@@ -441,16 +436,13 @@ make_kernel() {
   esac
 
   make -C "${KERNEL_DIR}" "${common[@]}" olddefconfig
-  if [[ "${MANAGER}" != "none" && "${KSU_MODE}" == "builtin" ]] && ! grep -Eq '^(CONFIG_KSU=y|CONFIG_KSU=m)$' "${out}/.config"; then
+  if [[ "${MANAGER}" != "none" ]] && ! grep -Eq '^(CONFIG_KSU=y|CONFIG_KSU=m)$' "${out}/.config"; then
     die "CONFIG_KSU did not stay enabled"
-  fi
-  if [[ "${KSU_MODE}" == "lkm" ]] && ! grep -q '^CONFIG_KPROBES=y$' "${out}/.config"; then
-    log "::warning::CONFIG_KPROBES is not enabled. kernelsu.ko needs kprobes to load."
   fi
   if [[ "${ENABLE_SUSFS}" == "true" ]] && ! grep -q '^CONFIG_KSU_SUSFS=y$' "${out}/.config"; then
     die "CONFIG_KSU_SUSFS did not stay enabled"
   fi
-  if [[ "${NOMOUNT}" == "builtin" ]] && ! grep -q '^CONFIG_NOMOUNT=y$' "${out}/.config"; then
+  if [[ "${ENABLE_NOMOUNT}" == "true" ]] && ! grep -q '^CONFIG_NOMOUNT=y$' "${out}/.config"; then
     die "CONFIG_NOMOUNT=y did not stay enabled"
   fi
 
@@ -489,62 +481,15 @@ EOF
 
   if [[ "${BUILD_SCOPE}" == "full" ]]; then
     build_techpack "${cc}" "${jobs}" "${out}"
-  fi
 
-  if [[ "${KSU_MODE}" == "lkm" && "${MANAGER}" != "none" ]]; then
-    log "Building ${MANAGER_DISPLAY} as an LKM"
-    make -C "${KERNEL_DIR}" "${common[@]}" modules_prepare
-    if [[ ! -s "${out}/Module.symvers" ]]; then
-      # Without Module.symvers the module would carry no symbol CRCs and fail to load.
-      log "Module.symvers is missing; running the kernel modules build once to create it"
-      make -C "${KERNEL_DIR}" -j"${jobs}" "${common[@]}" modules
-    fi
-    [[ -d "${out}/usr/include" ]] || log "::warning::${out}/usr/include is missing; the manager builds without preinit"
-    make -C "${KERNEL_DIR}" -j"${jobs}" "${common[@]}" M="${SRC}/ksu-lkm/kernel" CONFIG_KSU=m modules
-    [[ -s "${SRC}/ksu-lkm/kernel/kernelsu.ko" ]] || die "kernelsu.ko was not produced"
-    cp -f "${SRC}/ksu-lkm/kernel/kernelsu.ko" "${RELEASE}/kernelsu.ko"
-    llvm-strip -d "${RELEASE}/kernelsu.ko" || true
-    # Same check the upstream Makefile runs: every symbol the module needs must exist in vmlinux.
-    if cc -o "${SRC}/check_symbol" "${SRC}/ksu-lkm/kernel/tools/check_symbol.c" 2>/dev/null; then
-      "${SRC}/check_symbol" "${RELEASE}/kernelsu.ko" "${out}/vmlinux" \
-        || log "::warning::check_symbol reported missing symbols. kernelsu.ko may fail to load."
-    fi
-    cat > "${RELEASE}/kernelsu-lkm.txt" <<'EOF'
-kernelsu.ko matches this kernel only (same Image, same config).
-Flash the AnyKernel3 zip first, then patch your boot or init_boot image with:
-  ksud boot-patch -b <boot.img> --module kernelsu.ko --kmi <kmi>
-The Image in the zip does not contain KernelSU.
-EOF
-  fi
-
-  if [[ "${NOMOUNT}" == "lkm" ]]; then
-    log "Building NoMount as an LKM"
-    make -C "${KERNEL_DIR}" "${common[@]}" modules_prepare
-    CONFIG_NOMOUNT=m make -C "${KERNEL_DIR}" "${common[@]}" M="${KERNEL_DIR}/fs/nomount" modules
-    local ko
-    ko="$(find "${KERNEL_DIR}/fs/nomount" "${out}" -name 'nomount.ko' -print -quit || true)"
-    [[ -n "${ko}" ]] || die "nomount.ko was not produced"
-    cp -f "${ko}" "${RELEASE}/nomount.ko"
-    cat > "${RELEASE}/nomount-lkm.txt" <<'EOF'
-nomount.ko matches this kernel only.
-Put it in the lkm/ directory of the NoMount module zip
-(https://github.com/maxsteeel/nomount/releases) and flash that module
-from KernelSU or APatch. The boot image does not contain NoMount.
-EOF
-  fi
-
-  if [[ "${BUILD_SCOPE}" == "full" || "${NOMOUNT}" == "lkm" ]]; then
     local ko_roots=("${out}")
     if [[ -n "${MODULES_SRC}" && -d "${KERNEL_DIR}/${MODULES_SRC}" ]]; then
       ko_roots+=("${KERNEL_DIR}/${MODULES_SRC}")
     fi
-    if [[ -d "${KERNEL_DIR}/fs/nomount" ]]; then
-      ko_roots+=("${KERNEL_DIR}/fs/nomount")
-    fi
     if find "${ko_roots[@]}" -name '*.ko' -print -quit | grep -q .; then
       find "${ko_roots[@]}" -name '*.ko' -print0 | tar --null -T - -czf "${RELEASE}/modules.tar.gz"
     fi
-    if [[ "${BUILD_SCOPE}" == "full" ]] && find "${out}/arch/${ARCH}/boot/dts" -name '*.dtb' -print -quit 2>/dev/null | grep -q .; then
+    if find "${out}/arch/${ARCH}/boot/dts" -name '*.dtb' -print -quit 2>/dev/null | grep -q .; then
       find "${out}/arch/${ARCH}/boot/dts" -name '*.dtb' -print0 | tar --null -T - -czf "${RELEASE}/dtbs.tar.gz"
     fi
   fi
@@ -581,14 +526,14 @@ package_zip() {
   local ak="${ROOT}/ak3-work"
   rm -rf "${ak}"
   clone_ref "${ANYKERNEL_REPO}" "${ak}" "${ANYKERNEL_REF}"
-  local susfs_tag="nosusfs" nm_tag="nm-${NOMOUNT}" manager_tag="${MANAGER}"
-  [[ "${KSU_MODE}" == "lkm" && "${MANAGER}" != "none" ]] && manager_tag="${MANAGER}-lkm"
+  local susfs_tag="nosusfs" nm_tag="nm-off"
+  [[ "${ENABLE_NOMOUNT}" == "true" ]] && nm_tag="nm-on"
   [[ "${ENABLE_SUSFS}" == "true" ]] && susfs_tag="susfs"
   local version
   version="$(tr -d '\n' < "${RELEASE}/susfs-version.txt" 2>/dev/null || true)"
-  local manager_label="${MANAGER_DISPLAY}"
-  [[ "${KSU_MODE}" == "lkm" && "${MANAGER}" != "none" ]] && manager_label="${MANAGER_DISPLAY} LKM"
-  local string="${DEVICE} ${SOURCE_DISPLAY} ${manager_label} ${susfs_tag} ${nm_tag}"
+  local string="${DEVICE} ${SOURCE_DISPLAY}"
+  [[ -n "${KERNEL_NAME}" ]] && string="${string} (${KERNEL_NAME#-})"
+  string="${string} ${MANAGER_DISPLAY} ${susfs_tag} ${nm_tag}"
   [[ -n "${version}" ]] && string="${string} ${version}"
   sed \
     -e "s|__KERNEL_STRING__|${string}|" \
@@ -603,28 +548,23 @@ package_zip() {
   cp -f "${image}" "${ak}/"
   rm -rf "${ak}/.git" "${ak}/README.md" "${ak}/"*.placeholder
   local run="${GITHUB_RUN_NUMBER:-local}"
-  local name="${DEVICE}-${SOURCE_KEY}-${manager_tag}-${susfs_tag}-${nm_tag}-r${run}.zip"
+  local name="${DEVICE}-${SOURCE_KEY}-${MANAGER}-${susfs_tag}-${nm_tag}-r${run}.zip"
   (
     cd "${ak}"
     zip -r9 "${RELEASE}/${name}" . -x '.git/*'
   )
   ( cd "${RELEASE}" && sha256sum "${name}" > "${name}.sha256" )
-  if [[ -f "${RELEASE}/nomount.ko" ]]; then
-    cp -f "${RELEASE}/nomount.ko" "${RELEASE}/${name%.zip}-nomount.ko"
-  fi
-  if [[ -f "${RELEASE}/kernelsu.ko" ]]; then
-    cp -f "${RELEASE}/kernelsu.ko" "${RELEASE}/${name%.zip}-kernelsu.ko"
-  fi
   cat > "${RELEASE}/build-info.txt" <<EOF
 device: ${DEVICE} (${DEVICE_NAME_1} ${DEVICE_NAME_2})
+kernel_name: ${KERNEL_NAME:-default} (${KBUILD_BUILD_USER}@${KBUILD_BUILD_HOST})
 source: ${SOURCE_DISPLAY} [${SOURCE_KEY}] ${ROM_LABEL}
 fetch: ${FETCH}
 kernel: ${KERNEL_REPO:-${MANIFEST_REPO}} @ ${KERNEL_REF:-${MANIFEST_REF}}
 kernel_commit: $(cat "${RELEASE}/kernel-commit.txt" 2>/dev/null || echo unknown)
-manager: ${MANAGER_DISPLAY} (${KSU_MODE}) ${MANAGER_REPO}@${MANAGER_REF}
+manager: ${MANAGER_DISPLAY} ${MANAGER_REPO}@${MANAGER_REF}
 susfs: ${ENABLE_SUSFS} ${SUSFS_BRANCH} ${SUSFS_REF:-HEAD} $(cat "${RELEASE}/susfs-version.txt" 2>/dev/null || true)
 susfs_commit: $(cat "${RELEASE}/susfs-commit.txt" 2>/dev/null || echo n/a)
-nomount: ${NOMOUNT} ${NOMOUNT_REF}
+nomount: ${ENABLE_NOMOUNT} ${NOMOUNT_REF}
 toolchain: ${TOOLCHAIN}
 lto: ${LTO}
 scope: ${BUILD_SCOPE}
