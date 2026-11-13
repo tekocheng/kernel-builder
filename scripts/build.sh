@@ -27,10 +27,11 @@ BUILD_SCOPE="${BUILD_SCOPE:-image-only}"
 USE_CCACHE="${USE_CCACHE:-true}"
 ALL_SOURCES="${ALL_SOURCES:-false}"
 TOOLCHAIN_URL="${TOOLCHAIN_URL:-}"
+TOOLCHAIN_SHA256="${TOOLCHAIN_SHA256:-}"
 
 SRC="${ROOT}/src"
 RELEASE="${ROOT}/release"
-mkdir -p "${SRC}" "${RELEASE}"
+mkdir -p "${SRC}"
 
 log() { printf '%s\n' "$*"; }
 die() { printf '::error::%s\n' "$*" >&2; exit 1; }
@@ -44,10 +45,18 @@ if [[ -n "${GITHUB_OUTPUT:-}" && "${MATRIX_ONLY:-}" == "1" ]]; then
     --custom-ref "${CUSTOM_REF}" \
     --custom-fetch "${CUSTOM_FETCH}" \
     --manager "${MANAGER}" \
+    --manager-ref "${MANAGER_REF}" \
+    --toolchain "${TOOLCHAIN}" \
+    --toolchain-url "${TOOLCHAIN_URL}" \
+    --toolchain-sha256 "${TOOLCHAIN_SHA256}" \
     --all-sources "${ALL_SOURCES}" \
     --github-output "${GITHUB_OUTPUT}"
   exit 0
 fi
+
+# Never let files from a previous local build leak into this run's artifact.
+rm -rf "${RELEASE}"
+mkdir -p "${RELEASE}"
 
 python3 "${ROOT}/scripts/plan.py" write-plan \
   --device "${DEVICE}" \
@@ -67,13 +76,32 @@ python3 "${ROOT}/scripts/plan.py" write-plan \
   --nomount-ref "${NOMOUNT_REF}" \
   --toolchain "${TOOLCHAIN}" \
   --toolchain-url "${TOOLCHAIN_URL}" \
+  --toolchain-sha256 "${TOOLCHAIN_SHA256}" \
   --lto "${LTO}" \
   --build-scope "${BUILD_SCOPE}" \
   --ccache "${USE_CCACHE}" \
   --out "${RELEASE}/plan.env"
 
+redact_plan_artifact() {
+  if [[ -f "${RELEASE}/plan.env" ]]; then
+    python3 "${ROOT}/scripts/redact_plan.py" "${RELEASE}/plan.env" || \
+      log "::warning::Could not redact toolchain URL from release/plan.env"
+  fi
+}
+# Redact even when a later build step fails and Actions uploads artifacts with if: always().
+trap redact_plan_artifact EXIT
+
 # shellcheck disable=SC1091
+set -a
 source "${RELEASE}/plan.env"
+set +a
+MANAGER_EFFECTIVE_REPO="${MANAGER_REPO:-n/a}"
+MANAGER_EFFECTIVE_REF="${MANAGER_REF:-n/a}"
+if [[ "${MANAGER}" == "none" ]]; then
+  MANAGER_EFFECTIVE_REPO="n/a"
+  MANAGER_EFFECTIVE_REF="n/a"
+fi
+export MANAGER_EFFECTIVE_REPO MANAGER_EFFECTIVE_REF
 
 if [[ "${LTO}" == "full" ]]; then
   mem_kb="$(awk '/^(MemTotal|SwapTotal):/ {sum += $2} END {print sum + 0}' /proc/meminfo 2>/dev/null || echo 0)"
@@ -85,6 +113,7 @@ fi
 
 log "Plan: ${SOURCE_DISPLAY} (${SOURCE_KEY}) ${FETCH} + ${MANAGER_DISPLAY} susfs=${ENABLE_SUSFS} nomount=${ENABLE_NOMOUNT} name=${KERNEL_NAME:-default} toolchain=${TOOLCHAIN} lto=${LTO} scope=${BUILD_SCOPE}"
 if [[ "${RESOLVE_ONLY:-}" == "1" ]]; then
+  redact_plan_artifact
   cat "${RELEASE}/plan.env"
   exit 0
 fi
@@ -113,6 +142,7 @@ install_deps() {
 clone_ref() {
   local url="$1" dest="$2" ref="$3"
   local branch="${ref#refs/heads/}"
+  [[ -n "${url}" && -n "${ref}" ]] || die "clone_ref needs both a URL and a revision"
   rm -rf "${dest}"
   mkdir -p "$(dirname "${dest}")"
   git init -q "${dest}"
@@ -128,9 +158,32 @@ clone_ref() {
   die "Unable to fetch ${url} @ ${ref}"
 }
 
+safe_join() {
+  # Resolve a path and ensure it remains beneath the supplied checkout root.
+  python3 - "$1" "$2" <<'PYSAFEJOIN'
+import os, sys
+base = os.path.realpath(sys.argv[1])
+path = os.path.realpath(os.path.join(base, sys.argv[2]))
+try:
+    inside = os.path.commonpath((base, path)) == base
+except ValueError:
+    inside = False
+if not inside:
+    print(f"::error::Path escapes checkout root: {sys.argv[2]}", file=sys.stderr)
+    raise SystemExit(1)
+print(path)
+PYSAFEJOIN
+}
+
+record_project_commit() {
+  local url="$1" ref="$2" path="$3" directory="$4" commit
+  commit="$(git -C "${directory}" rev-parse HEAD)"
+  printf '%s\t%s\t%s\t%s\n' "${path}" "${url}" "${ref}" "${commit}" >> "${RELEASE}/project-commits.tsv"
+}
+
 github_url() {
   local repo="$1"
-  if [[ "${repo}" == https://* || "${repo}" == git@* ]]; then
+  if [[ "${repo}" == https://* || "${repo}" == ssh://* || "${repo}" == git://* || "${repo}" == git@* ]]; then
     printf '%s\n' "${repo}"
   else
     printf 'https://github.com/%s.git\n' "${repo}"
@@ -138,44 +191,54 @@ github_url() {
 }
 
 fetch_tree() {
+  : > "${RELEASE}/project-commits.tsv"
   if [[ "${FETCH}" == "manifest" ]]; then
-    local manifest_url
+    local manifest_url manifest_xml
     manifest_url="$(github_url "${MANIFEST_REPO}")"
     log "Manifest ${manifest_url} @ ${MANIFEST_REF}"
+    # Manifest projects removed upstream must not survive from an earlier local build.
+    rm -rf "${SRC}/tree"
+    mkdir -p "${SRC}/tree"
     clone_ref "${manifest_url}" "${SRC}/manifest" "${MANIFEST_REF}"
+    git -C "${SRC}/manifest" rev-parse HEAD > "${RELEASE}/manifest-commit.txt"
+    manifest_xml="$(safe_join "${SRC}/manifest" "${MANIFEST_FILE}")"
     python3 "${ROOT}/scripts/plan.py" manifest \
-      --xml "${SRC}/manifest/${MANIFEST_FILE}" \
+      --xml "${manifest_xml}" \
+      --root "${SRC}/manifest" \
       --skip "${MANIFEST_SKIP}" \
       --kernel-path "${KERNEL_PATH}" \
       --kernel-ref "${SOURCE_REF_OVERRIDE}" \
       > "${RELEASE}/projects.tsv"
     while IFS=$'\t' read -r url rev path; do
       [[ -n "${url}" ]] || continue
+      local project_dir
+      project_dir="$(safe_join "${SRC}/tree" "${path}")"
       log "Clone ${url} @ ${rev} -> ${path}"
-      clone_ref "${url}" "${SRC}/tree/${path}" "${rev}"
+      clone_ref "${url}" "${project_dir}" "${rev}"
+      record_project_commit "${url}" "${rev}" "${path}" "${project_dir}"
     done < "${RELEASE}/projects.tsv"
-    KERNEL_DIR="${SRC}/tree/${KERNEL_PATH}"
+    KERNEL_DIR="$(safe_join "${SRC}/tree" "${KERNEL_PATH}")"
   else
     local kernel_url
     kernel_url="$(github_url "${KERNEL_REPO}")"
     log "Kernel ${kernel_url} @ ${KERNEL_REF}"
     clone_ref "${kernel_url}" "${SRC}/kernel" "${KERNEL_REF}"
-    KERNEL_DIR="${SRC}/kernel"
-    if [[ -n "${KERNEL_PATH}" && "${KERNEL_PATH}" != "." ]]; then
-      KERNEL_DIR="${SRC}/kernel/${KERNEL_PATH}"
-    fi
+    KERNEL_DIR="$(safe_join "${SRC}/kernel" "${KERNEL_PATH}")"
+    record_project_commit "${kernel_url}" "${KERNEL_REF}" "${KERNEL_PATH}" "${SRC}/kernel"
     if [[ -s "${RELEASE}/extra.tsv" ]]; then
       while IFS=$'\t' read -r repo ref dest; do
         [[ -n "${repo}" ]] || continue
-        local abs
-        abs="$(cd "${KERNEL_DIR}" && mkdir -p "$(dirname "${dest}")" && cd "$(dirname "${dest}")" && pwd)/$(basename "${dest}")"
-        log "Extra $(github_url "${repo}") @ ${ref} -> ${abs}"
-        clone_ref "$(github_url "${repo}")" "${abs}" "${ref}"
+        local abs extra_url
+        abs="$(safe_join "${SRC}" "${KERNEL_DIR}/${dest}")"
+        extra_url="$(github_url "${repo}")"
+        log "Extra ${extra_url} @ ${ref} -> ${abs}"
+        clone_ref "${extra_url}" "${abs}" "${ref}"
+        record_project_commit "${extra_url}" "${ref}" "${dest}" "${abs}"
       done < "${RELEASE}/extra.tsv"
     fi
   fi
   [[ -f "${KERNEL_DIR}/Makefile" ]] || die "Kernel Makefile not found at ${KERNEL_DIR}"
-  git -C "${KERNEL_DIR}" rev-parse HEAD > "${RELEASE}/kernel-commit.txt" || true
+  git -C "${KERNEL_DIR}" rev-parse HEAD > "${RELEASE}/kernel-commit.txt"
   log "Kernel tree: ${KERNEL_DIR}"
 }
 
@@ -204,23 +267,60 @@ resolve_defconfig_if_auto() {
 fetch_toolchain() {
   [[ -n "${TOOLCHAIN_URL}" ]] || die "No download URL for toolchain ${TOOLCHAIN}. See config/toolchains.json"
   local dir="${ROOT}/toolchains/${TOOLCHAIN}"
+  local expected="${TOOLCHAIN_SHA256,,}" cached_sha="" cache_identity="" cached_identity=""
+  cache_identity="$(printf '%s\n%s\n' "${TOOLCHAIN_URL}" "${expected}" | sha256sum | awk '{print $1}')"
+  if [[ -f "${dir}/.archive.sha256" ]]; then
+    cached_sha="$(tr -d '[:space:]' < "${dir}/.archive.sha256")"
+  fi
+  if [[ -f "${dir}/.identity" ]]; then
+    cached_identity="$(tr -d '[:space:]' < "${dir}/.identity")"
+  fi
+  if [[ -x "${dir}/bin/clang" && "${cached_identity}" != "${cache_identity}" ]]; then
+    log "Cached ${TOOLCHAIN} was created from a different URL/checksum identity; downloading again"
+    rm -rf "${dir}"
+  fi
   if [[ ! -x "${dir}/bin/clang" ]]; then
-    local archive="${SRC}/toolchain.archive" tmp="${SRC}/toolchain-tmp"
-    log "Toolchain ${TOOLCHAIN}: ${TOOLCHAIN_URL}"
-    curl -fL --retry 3 -o "${archive}" "${TOOLCHAIN_URL}"
+    local archive="${SRC}/toolchain.archive" tmp="${SRC}/toolchain-tmp" actual_sha
+    local display_url
+    display_url="$(python3 - "${TOOLCHAIN_URL}" <<'PYURL'
+import sys, urllib.parse
+parsed = urllib.parse.urlsplit(sys.argv[1])
+host = parsed.hostname or ""
+if parsed.port:
+    host += f":{parsed.port}"
+print(urllib.parse.urlunsplit((parsed.scheme, host, parsed.path, "", "")))
+PYURL
+)"
+    log "Toolchain ${TOOLCHAIN}: ${display_url}"
+    curl -fL --retry 3 --retry-all-errors -o "${archive}" "${TOOLCHAIN_URL}"
+    actual_sha="$(sha256sum "${archive}" | awk '{print $1}')"
+    if [[ -n "${expected}" && "${actual_sha}" != "${expected}" ]]; then
+      rm -f "${archive}"
+      die "Toolchain SHA-256 mismatch: expected ${expected}, got ${actual_sha}"
+    fi
+    printf '%s\n' "${actual_sha}" > "${RELEASE}/toolchain-archive.sha256"
     rm -rf "${tmp}" "${dir}"
     mkdir -p "${tmp}" "$(dirname "${dir}")"
-    tar -xf "${archive}" -C "${tmp}"
+    python3 "${ROOT}/scripts/safe_extract.py" "${archive}" "${tmp}"
     rm -f "${archive}"
     local clang_bin
-    clang_bin="$(find "${tmp}" -maxdepth 3 \( -type f -o -type l \) -path '*/bin/clang' -print -quit)"
-    [[ -n "${clang_bin}" ]] || die "No bin/clang inside ${TOOLCHAIN_URL}"
+    clang_bin="$(find "${tmp}" -maxdepth 4 \( -type f -o -type l \) -path '*/bin/clang' -print -quit)"
+    [[ -n "${clang_bin}" ]] || die "No bin/clang found in downloaded ${TOOLCHAIN} archive (${display_url})"
     mv "$(dirname "$(dirname "${clang_bin}")")" "${dir}"
+    printf '%s\n' "${actual_sha}" > "${dir}/.archive.sha256"
+    printf '%s\n' "${cache_identity}" > "${dir}/.identity"
     rm -rf "${tmp}"
+  else
+    if [[ -n "${cached_sha}" ]]; then
+      printf '%s\n' "${cached_sha}" > "${RELEASE}/toolchain-archive.sha256"
+    else
+      log "::warning::Using cached ${TOOLCHAIN} without recorded archive checksum"
+    fi
   fi
   TOOLCHAIN_BIN="${dir}/bin"
   export PATH="${TOOLCHAIN_BIN}:${PATH}"
-  "${TOOLCHAIN_BIN}/clang" --version | head -n 2
+  "${TOOLCHAIN_BIN}/clang" --version > "${RELEASE}/toolchain-version.txt"
+  sed -n '1,2p' "${RELEASE}/toolchain-version.txt"
 }
 
 kconfig_path() {
@@ -239,11 +339,15 @@ kconfig_path() {
 
 setup_manager_from() {
   local repo="$1" ref="$2"
+  MANAGER_EFFECTIVE_REPO="${repo}"
+  MANAGER_EFFECTIVE_REF="${ref}"
+  export MANAGER_EFFECTIVE_REPO MANAGER_EFFECTIVE_REF
   local url="https://raw.githubusercontent.com/${repo}/${ref}/${MANAGER_SETUP}"
   log "Manager setup ${repo} @ ${ref}"
   rm -rf "${KERNEL_DIR}/KernelSU" "${KERNEL_DIR}/KernelSU-Next" \
     "${KERNEL_DIR}/drivers/kernelsu" "${KERNEL_DIR}/common/drivers/kernelsu"
   curl -fsSL "${url}" -o "${SRC}/manager-setup.sh"
+  sha256sum "${SRC}/manager-setup.sh" | awk '{print $1}' > "${RELEASE}/manager-setup.sha256"
   (
     cd "${KERNEL_DIR}"
     bash "${SRC}/manager-setup.sh" "${ref}"
@@ -274,6 +378,25 @@ apply_manager() {
   fi
   setup_manager_from "${MANAGER_REPO}" "${MANAGER_REF}"
   kconfig_path >/dev/null || die "Manager setup did not create a kernel Kconfig"
+}
+
+record_manager_commit() {
+  local candidate
+  : > "${RELEASE}/manager-commit.txt"
+  if [[ "${MANAGER}" == "none" ]]; then
+    printf 'n/a\n' > "${RELEASE}/manager-commit.txt"
+    return 0
+  fi
+  for candidate in "${KERNEL_DIR}/KernelSU" "${KERNEL_DIR}/KernelSU-Next"; do
+    if git -C "${candidate}" rev-parse HEAD >/dev/null 2>&1; then
+      git -C "${candidate}" rev-parse HEAD > "${RELEASE}/manager-commit.txt"
+      return 0
+    fi
+  done
+  printf 'unknown\n' > "${RELEASE}/manager-commit.txt"
+  if [[ "${MANAGER}" != "none" ]]; then
+    log "::warning::Could not determine the installed manager commit"
+  fi
 }
 
 apply_susfs() {
@@ -346,6 +469,7 @@ apply_nomount() {
   fi
   log "NoMount setup @ ${NOMOUNT_REF}"
   curl -fsSL "${raw}" -o "${SRC}/nomount-setup.sh"
+  sha256sum "${SRC}/nomount-setup.sh" | awk '{print $1}' > "${RELEASE}/nomount-setup.sha256"
   (
     cd "${KERNEL_DIR}"
     bash "${SRC}/nomount-setup.sh" "${NOMOUNT_REF}"
@@ -509,23 +633,36 @@ build_techpack() {
   if [[ ! -d "${src}" ]]; then
     die "Techpack directory missing: ${src}"
   fi
-  local module
+  local module skipped="${RELEASE}/skipped-techpack.txt"
+  : > "${skipped}"
   while IFS= read -r module; do
     [[ -z "${module}" || "${module}" == \#* ]] && continue
     if [[ ! -d "${src}/${module}" ]]; then
       log "::warning::Skipping missing techpack ${module}"
+      printf '%s\n' "${module}" >> "${skipped}"
       continue
     fi
     log "Techpack ${module}"
     make -C "${KERNEL_DIR}" -j"${jobs}" O="${out}" ARCH="${ARCH}" LLVM=1 LLVM_IAS=1 CC="${cc}" \
       M="${src}/${module}" KERNEL_SRC="${KERNEL_DIR}" OUT_DIR="${out}" modules
   done < "${ROOT}/${MODULES_LIST}"
+  if [[ ! -s "${skipped}" ]]; then
+    rm -f "${skipped}"
+  else
+    log "::warning::$(wc -l < "${skipped}" | tr -d ' ') configured techpack module(s) were not present; see skipped-techpack.txt"
+  fi
+}
+
+write_build_metadata() {
+  local zip_name="$1"
+  python3 "${ROOT}/scripts/write_metadata.py" --release-dir "${RELEASE}" --zip-name "${zip_name}"
 }
 
 package_zip() {
   local ak="${ROOT}/ak3-work"
   rm -rf "${ak}"
   clone_ref "${ANYKERNEL_REPO}" "${ak}" "${ANYKERNEL_REF}"
+  git -C "${ak}" rev-parse HEAD > "${RELEASE}/anykernel-commit.txt"
   local susfs_tag="nosusfs" nm_tag="nm-off"
   [[ "${ENABLE_NOMOUNT}" == "true" ]] && nm_tag="nm-on"
   [[ "${ENABLE_SUSFS}" == "true" ]] && susfs_tag="susfs"
@@ -535,16 +672,37 @@ package_zip() {
   [[ -n "${KERNEL_NAME}" ]] && string="${string} (${KERNEL_NAME#-})"
   string="${string} ${MANAGER_DISPLAY} ${susfs_tag} ${nm_tag}"
   [[ -n "${version}" ]] && string="${string} ${version}"
-  sed \
-    -e "s|__KERNEL_STRING__|${string}|" \
-    -e "s|__DEVICE_NAME_1__|${DEVICE_NAME_1}|" \
-    -e "s|__DEVICE_NAME_2__|${DEVICE_NAME_2}|" \
-    "${ROOT}/ak3/anykernel.sh" > "${ak}/anykernel.sh"
+  export AK_KERNEL_STRING="${string}" AK_DEVICE_NAME_1="${DEVICE_NAME_1}" AK_DEVICE_NAME_2="${DEVICE_NAME_2}"
+  python3 - "${ROOT}/ak3/anykernel.sh" "${ak}/anykernel.sh" <<'PYAK'
+import os, pathlib, re, sys
+source = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8")
+def shell_single_quoted_value(value: str) -> str:
+    # The AnyKernel properties block is a shell single-quoted string.
+    return value.replace("'", "'\\''")
+values = {
+    "__KERNEL_STRING__": shell_single_quoted_value(os.environ["AK_KERNEL_STRING"]),
+    "__DEVICE_NAME_1__": shell_single_quoted_value(os.environ["AK_DEVICE_NAME_1"]),
+    "__DEVICE_NAME_2__": shell_single_quoted_value(os.environ["AK_DEVICE_NAME_2"]),
+}
+pattern = re.compile("|".join(re.escape(key) for key in values))
+source = pattern.sub(lambda match: values[match.group(0)], source)
+remaining = ("__KERNEL_STRING__", "__DEVICE_NAME_1__", "__DEVICE_NAME_2__")
+if any(token in source for token in remaining):
+    raise SystemExit("Unexpanded AnyKernel template placeholder remains")
+pathlib.Path(sys.argv[2]).write_text(source, encoding="utf-8")
+PYAK
   if [[ -z "${DEVICE_NAME_2}" ]]; then
     sed -i '/^device.name2=/d' "${ak}/anykernel.sh"
   fi
   local image
-  image="$(find "${RELEASE}" -maxdepth 1 -type f \( -name 'Image' -o -name 'Image.gz' -o -name 'Image.gz-dtb' \) -print -quit)"
+  image=""
+  for candidate in Image Image.gz Image.gz-dtb; do
+    if [[ -s "${RELEASE}/${candidate}" ]]; then
+      image="${RELEASE}/${candidate}"
+      break
+    fi
+  done
+  [[ -n "${image}" ]] || die "No packaged kernel image found in ${RELEASE}"
   cp -f "${image}" "${ak}/"
   rm -rf "${ak}/.git" "${ak}/README.md" "${ak}/"*.placeholder
   local run="${GITHUB_RUN_NUMBER:-local}"
@@ -554,22 +712,7 @@ package_zip() {
     zip -r9 "${RELEASE}/${name}" . -x '.git/*'
   )
   ( cd "${RELEASE}" && sha256sum "${name}" > "${name}.sha256" )
-  cat > "${RELEASE}/build-info.txt" <<EOF
-device: ${DEVICE} (${DEVICE_NAME_1} ${DEVICE_NAME_2})
-kernel_name: ${KERNEL_NAME:-default} (${KBUILD_BUILD_USER}@${KBUILD_BUILD_HOST})
-source: ${SOURCE_DISPLAY} [${SOURCE_KEY}] ${ROM_LABEL}
-fetch: ${FETCH}
-kernel: ${KERNEL_REPO:-${MANIFEST_REPO}} @ ${KERNEL_REF:-${MANIFEST_REF}}
-kernel_commit: $(cat "${RELEASE}/kernel-commit.txt" 2>/dev/null || echo unknown)
-manager: ${MANAGER_DISPLAY} ${MANAGER_REPO}@${MANAGER_REF}
-susfs: ${ENABLE_SUSFS} ${SUSFS_BRANCH} ${SUSFS_REF:-HEAD} $(cat "${RELEASE}/susfs-version.txt" 2>/dev/null || true)
-susfs_commit: $(cat "${RELEASE}/susfs-commit.txt" 2>/dev/null || echo n/a)
-nomount: ${ENABLE_NOMOUNT} ${NOMOUNT_REF}
-toolchain: ${TOOLCHAIN}
-lto: ${LTO}
-scope: ${BUILD_SCOPE}
-zip: ${name}
-EOF
+  write_build_metadata "${name}"
   log "Packaged ${name}"
   if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
     {
@@ -588,6 +731,7 @@ resolve_defconfig_if_auto
 fetch_toolchain
 apply_manager
 apply_susfs
+record_manager_commit
 apply_nomount
 make_kernel
 package_zip
