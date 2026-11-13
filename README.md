@@ -1,4 +1,4 @@
-# Kernel Builder
+# Kernel Builder For Android
 
 A configurable GitHub Actions builder for Android kernels. The current configuration targets the **Poco F5 / Redmi Note 12 Turbo** (`marble` / `marblein`) and packages the compiled kernel image into a flashable **AnyKernel3** ZIP.
 
