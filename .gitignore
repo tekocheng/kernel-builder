@@ -5,3 +5,7 @@ llvm-*/
 ak3-work/
 *.rej
 .cache/
+toolchains/
+__pycache__/
+*.py[cod]
+.toolchain-cache-key
