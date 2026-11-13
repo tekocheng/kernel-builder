@@ -77,7 +77,7 @@ def source_entry(key: str, args: argparse.Namespace) -> dict:
     return SOURCES[key]
 
 
-def resolve_manager(name: str, susfs: bool, manager_ref: str, ksu_mode: str = "builtin") -> dict[str, str]:
+def resolve_manager(name: str, susfs: bool, manager_ref: str) -> dict[str, str]:
     if name not in MANAGERS:
         die(f"Unknown manager '{name}'. Known: {', '.join(MANAGERS)} or all")
     entry = MANAGERS[name]
@@ -92,12 +92,6 @@ def resolve_manager(name: str, susfs: bool, manager_ref: str, ksu_mode: str = "b
             "MANAGER_SUSFS_FALLBACK_REF": "",
             "ENABLE_SUSFS": "false",
         }
-    if ksu_mode == "lkm":
-        if not entry.get("lkm", False):
-            die(f"{entry['display']} has no LKM build recipe. Use ksu_mode=builtin or manager=kernelsu")
-        if susfs:
-            print("::warning::SUSFS is not combined with the LKM build; building without it", file=sys.stderr)
-            susfs = False
     ref = manager_ref.strip()
     if not ref:
         ref = entry.get("susfs_ref") if susfs and entry.get("susfs_ref") else entry.get("ref", "")
@@ -142,17 +136,10 @@ def write_plan(args: argparse.Namespace) -> None:
     device = load_device(args.device)
     entry = source_entry(args.kernel_source, args)
     susfs = truthy(args.susfs)
-    ksu_mode = args.ksu_mode.strip() or "builtin"
-    if ksu_mode not in {"builtin", "lkm"}:
-        die("ksu_mode must be builtin or lkm")
-    if ksu_mode == "lkm" and args.manager == "none":
-        die("ksu_mode=lkm needs a root manager")
-    manager = resolve_manager(args.manager, susfs, args.manager_ref, ksu_mode)
+    nomount = truthy(args.nomount)
+    manager = resolve_manager(args.manager, susfs, args.manager_ref)
     mode = entry.get("defconfig_mode", "auto")
     toolchain, toolchain_entry = resolve_toolchain(args.toolchain, args.toolchain_url, entry)
-    nomount = args.nomount.strip() or "off"
-    if nomount not in {"off", "builtin", "lkm"}:
-        die("nomount must be off, builtin, or lkm")
     if args.lto not in {"none", "thin", "full"}:
         die("lto must be none, thin, or full")
     if args.build_scope not in {"image-only", "full"}:
@@ -162,11 +149,14 @@ def write_plan(args: argparse.Namespace) -> None:
     if entry.get("fetch") == "git" and args.source_ref.strip() and args.kernel_source != "custom":
         kernel_ref = args.source_ref.strip()
 
+    kernel_name = args.kernel_name.strip() or device.get("KERNEL_NAME", "")
+
     values = {
         "DEVICE": args.device,
         "ARCH": device.get("ARCH", "arm64"),
         "DEVICE_NAME_1": device.get("DEVICE_NAME_1", args.device),
         "DEVICE_NAME_2": device.get("DEVICE_NAME_2", ""),
+        "KERNEL_NAME": kernel_name,
         "DEFCONFIG_SINGLE": entry.get("defconfig") or device.get("DEFCONFIG_SINGLE", ""),
         "GKI_FRAGMENTS": fragments_for(entry, device),
         "SOURCE_KEY": args.kernel_source,
@@ -192,7 +182,7 @@ def write_plan(args: argparse.Namespace) -> None:
         "SUSFS_REPO": device.get("SUSFS_REPO", "https://gitlab.com/simonpunk/susfs4ksu.git"),
         "SUSFS_BRANCH": args.susfs_branch.strip() or device.get("SUSFS_BRANCH", "gki-android12-5.10"),
         "SUSFS_REF": args.susfs_ref.strip(),
-        "NOMOUNT": nomount,
+        "ENABLE_NOMOUNT": "true" if nomount else "false",
         "NOMOUNT_REPO": device.get("NOMOUNT_REPO", "https://github.com/maxsteeel/nomount"),
         "NOMOUNT_REF": args.nomount_ref.strip() or device.get("NOMOUNT_REF", "dev"),
         "ANYKERNEL_REPO": device.get("ANYKERNEL_REPO", "https://github.com/osm0sis/AnyKernel3.git"),
@@ -200,10 +190,7 @@ def write_plan(args: argparse.Namespace) -> None:
         "KBUILD_BUILD_USER": device.get("KBUILD_BUILD_USER", args.device),
         "KBUILD_BUILD_HOST": device.get("KBUILD_BUILD_HOST", "github-actions"),
         "USE_CCACHE": "true" if truthy(args.ccache) else "false",
-        "KSU_MODE": ksu_mode if args.manager != "none" else "builtin",
     }
-    # Manifest ref override moves the manifest checkout, not only the kernel project.
-    # The kernel project revision is overridden separately via SOURCE_REF_OVERRIDE.
     if entry.get("fetch") == "manifest" and args.source_ref.strip() and args.kernel_source == "custom":
         values["MANIFEST_REF"] = args.source_ref.strip()
     values.update(manager)
@@ -219,9 +206,6 @@ def write_plan(args: argparse.Namespace) -> None:
         dest = item.get("dest", "")
         repo = item.get("repo", "")
         ref = item.get("ref", "")
-        if args.source_ref.strip() and args.kernel_source != "custom":
-            # Keep extra repos on their preset refs. Override only the kernel ref.
-            pass
         if not repo or not dest or not ref:
             die(f"extra repo entry for {args.kernel_source} needs repo, ref, and dest")
         rows.append(f"{repo}\t{ref}\t{dest}")
@@ -281,11 +265,6 @@ def emit_matrix(args: argparse.Namespace) -> None:
     managers = list(MANAGERS) if args.manager == "all" else [args.manager]
     if args.manager != "all" and args.manager not in MANAGERS:
         die(f"Unknown manager '{args.manager}'. Known: {', '.join(MANAGERS)} or all")
-    if args.ksu_mode == "lkm":
-        # Only managers with an LKM recipe can run in this mode.
-        managers = [name for name in managers if name != "none" and MANAGERS[name].get("lkm", False)]
-        if not managers:
-            die(f"ksu_mode=lkm is not available for manager '{args.manager}'. Use kernelsu or all")
     load_device(args.device)
     include = [{"source": source, "manager": manager} for source in sources for manager in managers]
     payload = json.dumps({"include": include}, separators=(",", ":"))
@@ -302,6 +281,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     plan = sub.add_parser("write-plan")
     plan.add_argument("--device", default="marble")
+    plan.add_argument("--kernel-name", default="")
     plan.add_argument("--kernel-source", default="aosp")
     plan.add_argument("--source-ref", default="")
     plan.add_argument("--custom-repo", default="")
@@ -310,11 +290,10 @@ def build_parser() -> argparse.ArgumentParser:
     plan.add_argument("--custom-kernel-path", default="")
     plan.add_argument("--manager", default="kernelsu")
     plan.add_argument("--manager-ref", default="")
-    plan.add_argument("--ksu-mode", default="builtin")
     plan.add_argument("--susfs", default="true")
     plan.add_argument("--susfs-ref", default="")
     plan.add_argument("--susfs-branch", default="")
-    plan.add_argument("--nomount", default="off")
+    plan.add_argument("--nomount", default="false")
     plan.add_argument("--nomount-ref", default="")
     plan.add_argument("--toolchain", default="auto")
     plan.add_argument("--toolchain-url", default="")
@@ -339,7 +318,6 @@ def build_parser() -> argparse.ArgumentParser:
     matrix.add_argument("--source-ref", default="")
     matrix.add_argument("--custom-fetch", default="git")
     matrix.add_argument("--manager", default="kernelsu")
-    matrix.add_argument("--ksu-mode", default="builtin")
     matrix.add_argument("--all-sources", default="false")
     matrix.add_argument("--github-output", default="")
     matrix.set_defaults(func=emit_matrix)
