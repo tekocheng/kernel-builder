@@ -36,6 +36,9 @@ mkdir -p "${SRC}"
 log() { printf '%s\n' "$*"; }
 die() { printf '::error::%s\n' "$*" >&2; exit 1; }
 
+# shellcheck source=scripts/techpack.sh
+source "${ROOT}/scripts/techpack.sh"
+
 if [[ -n "${GITHUB_OUTPUT:-}" && "${MATRIX_ONLY:-}" == "1" ]]; then
   python3 "${ROOT}/scripts/plan.py" matrix \
     --device "${DEVICE}" \
@@ -643,8 +646,7 @@ build_techpack() {
       continue
     fi
     log "Techpack ${module}"
-    make -C "${KERNEL_DIR}" -j"${jobs}" O="${out}" ARCH="${ARCH}" LLVM=1 LLVM_IAS=1 CC="${cc}" \
-      M="${src}/${module}" KERNEL_SRC="${KERNEL_DIR}" OUT_DIR="${out}" modules
+    run_techpack_module "${KERNEL_DIR}" "${src}/${module}" "${jobs}" "${out}" "${ARCH}" "${cc}"
   done < "${ROOT}/${MODULES_LIST}"
   if [[ ! -s "${skipped}" ]]; then
     rm -f "${skipped}"
