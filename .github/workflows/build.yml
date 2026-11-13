@@ -97,6 +97,10 @@ on:
         description: "Optional https link to a clang archive (tar.gz, tar.xz). Overrides toolchain for this run only."
         type: string
         default: ""
+      toolchain_sha256:
+        description: "Optional expected SHA-256 for toolchain_url or a configured toolchain archive."
+        type: string
+        default: ""
       lto:
         description: "thin is the safe default. full needs about 30 GB of RAM plus swap and is slow on hosted runners."
         type: choice
@@ -138,6 +142,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Validate builder configuration and tests
+        run: |
+          python3 scripts/validate.py
+          python3 -m unittest discover -s tests -v
+          bash -n scripts/build.sh
+
       - name: Expand source and manager matrix
         id: gen
         env:
@@ -150,6 +160,10 @@ jobs:
           CUSTOM_REF: ${{ inputs.custom_ref }}
           CUSTOM_FETCH: ${{ inputs.custom_fetch }}
           MANAGER: ${{ inputs.manager }}
+          MANAGER_REF: ${{ inputs.manager_ref }}
+          TOOLCHAIN: ${{ inputs.toolchain }}
+          TOOLCHAIN_URL: ${{ inputs.toolchain_url }}
+          TOOLCHAIN_SHA256: ${{ inputs.toolchain_sha256 }}
         run: bash scripts/build.sh
 
   build:
@@ -159,6 +173,7 @@ jobs:
     timeout-minutes: 180
     strategy:
       fail-fast: false
+      max-parallel: 2
       matrix: ${{ fromJSON(needs.matrix.outputs.matrix) }}
     steps:
       - name: Checkout
@@ -178,6 +193,13 @@ jobs:
           sudo sysctl -w vm.swappiness=100
           df -h /
 
+      - name: Prepare toolchain cache identity
+        env:
+          TOOLCHAIN_URL: ${{ inputs.toolchain_url }}
+          TOOLCHAIN_SHA256: ${{ inputs.toolchain_sha256 }}
+        run: |
+          printf '%s\n%s\n' "$TOOLCHAIN_URL" "$TOOLCHAIN_SHA256" > .toolchain-cache-key
+
       - name: Restore toolchain and ccache
         uses: actions/cache@v6
         with:
@@ -185,10 +207,10 @@ jobs:
             toolchains
             /home/runner/.ccache
             /home/runner/.cache/thinlto
-          key: kernel-tools-v1-${{ runner.os }}-${{ inputs.toolchain }}-${{ hashFiles('scripts/build.sh', 'config/toolchains.json') }}
+          key: kernel-tools-v2-${{ runner.os }}-${{ inputs.toolchain }}-${{ hashFiles('.toolchain-cache-key', 'scripts/build.sh', 'scripts/plan.py', 'scripts/safe_extract.py', 'config/sources.json', 'config/toolchains.json') }}
           restore-keys: |
-            kernel-tools-v1-${{ runner.os }}-${{ inputs.toolchain }}-
-            kernel-tools-v1-${{ runner.os }}-
+            kernel-tools-v2-${{ runner.os }}-${{ inputs.toolchain }}-
+            kernel-tools-v2-${{ runner.os }}-
 
       - name: Build
         env:
@@ -209,6 +231,7 @@ jobs:
           NOMOUNT_REF: ${{ inputs.nomount_ref }}
           TOOLCHAIN: ${{ inputs.toolchain }}
           TOOLCHAIN_URL: ${{ inputs.toolchain_url }}
+          TOOLCHAIN_SHA256: ${{ inputs.toolchain_sha256 }}
           LTO: ${{ inputs.lto }}
           BUILD_SCOPE: ${{ inputs.build_scope }}
           USE_CCACHE: ${{ inputs.ccache }}
@@ -253,4 +276,5 @@ jobs:
             --target "${GITHUB_SHA}" \
             --title "${{ inputs.device }} kernel r${GITHUB_RUN_NUMBER}" \
             --notes "Draft from workflow run ${GITHUB_RUN_NUMBER}. Flash the zip that matches your ROM."
+
             
