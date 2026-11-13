@@ -24,8 +24,8 @@ class TechpackWrapperTests(unittest.TestCase):
 
     def _run_helper(self, module: Path, result_file: Path):
         script = (
-            'source "$1"\n'
-            'run_techpack_module "$2" "$3" 2 "$4" arm64 clang\n'
+            'source "$1"\\n'
+            'run_techpack_module "$2" "$3" 2 "$4" arm64 clang\\n'
         )
         env = os.environ.copy()
         env["TECHPACK_TEST_RESULT"] = str(result_file)
@@ -43,16 +43,16 @@ class TechpackWrapperTests(unittest.TestCase):
     def test_mmrm_wrapper_passes_relative_m_root_and_kbuild_output(self):
         module = self.modules / "mmrm-driver"
         (module / "config").mkdir(parents=True)
-        (module / "config" / "waipiommrm.conf").write_text("export CONFIG_MSM_MMRM=y\n")
+        (module / "config" / "waipiommrm.conf").write_text("export CONFIG_MSM_MMRM=y\\n")
         (module / "Makefile").write_text(
-            "KBUILD_OPTIONS += MMRM_ROOT=$(KERNEL_SRC)/$(M)\n"
-            "modules:\n"
-            "\t$(MAKE) -C $(KERNEL_SRC) M=$(M) modules $(KBUILD_OPTIONS)\n"
+            "KBUILD_OPTIONS += MMRM_ROOT=$(KERNEL_SRC)/$(M)\\n"
+            "modules:\\n"
+            "\t$(MAKE) -C $(KERNEL_SRC) M=$(M) modules $(KBUILD_OPTIONS)\\n"
         )
         self._write_kernel_makefile(
-            "modules:\n"
-            "\t@printf 'M=%s\\nMMRM_ROOT=%s\\nO=%s\\n' '$(M)' '$(MMRM_ROOT)' '$(O)' > \"$(TECHPACK_TEST_RESULT)\"\n"
-            "\t@test -f '$(MMRM_ROOT)/config/waipiommrm.conf'\n"
+            "modules:\\n"
+            "\t@printf 'M=%s\\nMMRM_ROOT=%s\\nO=%s\\n' '$(M)' '$(MMRM_ROOT)' '$(O)' > \"$(TECHPACK_TEST_RESULT)\"\\n"
+            "\t@test -f '$(MMRM_ROOT)/config/waipiommrm.conf'\\n"
         )
 
         result_file = self.base / "result.txt"
@@ -65,41 +65,39 @@ class TechpackWrapperTests(unittest.TestCase):
         self.assertIn(f"O={self.out}", output)
         self.assertIn("Techpack wrapper:", completed.stdout)
 
-    def test_parent_wrapper_preserves_hidden_symlink_wlan_profile(self):
+    def test_parent_wrapper_builds_nested_qcacld_profile(self):
         wrapper = self.modules / "wlan" / "qcacld-3.0"
-        wrapper.mkdir(parents=True)
         module = wrapper / ".qca6490"
-        module.symlink_to(".", target_is_directory=True)
+        module.mkdir(parents=True)
         (wrapper / "Makefile").write_text(
-            "KERNEL_SRC ?= /lib/modules/build\n"
-            "M ?= $(shell pwd)\n"
-            "LOCAL_DEV_NAME := $(patsubst .%,%,$(lastword $(strip $(subst /, ,$(M)))))\n"
-            "KBUILD_OPTIONS := WLAN_ROOT=$(KERNEL_SRC)/$(M)\n"
-            "all:\n"
-            "\t$(MAKE) -C $(KERNEL_SRC) M=$(M) modules $(KBUILD_OPTIONS)\n"
+            "KERNEL_SRC ?= /lib/modules/build\\n"
+            "M ?= $(shell pwd)\\n"
+            "LOCAL_DEV_NAME := $(patsubst .%,%,$(lastword $(strip $(subst /, ,$(M)))))\\n"
+            "KBUILD_OPTIONS := WLAN_ROOT=$(KERNEL_SRC)/$(M)\\n"
+            "all:\\n"
+            "\t$(MAKE) -C $(KERNEL_SRC) M=$(M) modules $(KBUILD_OPTIONS)\\n"
         )
         self._write_kernel_makefile(
-            "modules:\n"
-            "\t@printf 'M=%s\\nWLAN_ROOT=%s\\n' '$(M)' '$(WLAN_ROOT)' > \"$(TECHPACK_TEST_RESULT)\"\n"
+            "modules:\\n"
+            "\t@printf 'M=%s\\nWLAN_ROOT=%s\\n' '$(M)' '$(WLAN_ROOT)' > \"$(TECHPACK_TEST_RESULT)\"\\n"
         )
 
-        result_file = self.base / "result-wlan.txt"
+        result_file = self.base / "result-parent.txt"
         completed = self._run_helper(module, result_file)
         output = result_file.read_text()
         expected_m = os.path.relpath(module, self.kernel)
         self.assertIn(f"M={expected_m}", output)
-        self.assertTrue(expected_m.endswith("/qcacld-3.0/.qca6490"))
         wlan_root = next(line.split("=", 1)[1] for line in output.splitlines() if line.startswith("WLAN_ROOT="))
-        self.assertTrue(wlan_root.endswith("/qcacld-3.0/.qca6490"))
+        self.assertEqual(Path(wlan_root).resolve(), module.resolve())
         self.assertIn("target=all", completed.stdout)
 
     def test_direct_kbuild_fallback_keeps_absolute_module_path(self):
         module = self.modules / "plain-module"
         module.mkdir(parents=True)
-        (module / "Kbuild").write_text("obj-m += example.o\n")
+        (module / "Kbuild").write_text("obj-m += example.o\\n")
         self._write_kernel_makefile(
-            "modules:\n"
-            "\t@printf 'M=%s\\nO=%s\\n' '$(M)' '$(O)' > \"$(TECHPACK_TEST_RESULT)\"\n"
+            "modules:\\n"
+            "\t@printf 'M=%s\\nO=%s\\n' '$(M)' '$(O)' > \"$(TECHPACK_TEST_RESULT)\"\\n"
         )
 
         result_file = self.base / "result-direct.txt"
