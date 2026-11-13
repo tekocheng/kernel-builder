@@ -1,0 +1,30 @@
+name: Validate Builder
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate configuration and scripts
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Validate repository configuration
+        run: python3 scripts/validate.py
+
+      - name: Run unit tests
+        run: python3 -m unittest discover -s tests -v
+
+      - name: Check shell syntax
+        run: bash -n scripts/build.sh
+
+      - name: Check Python syntax
+        run: python3 -m compileall -q scripts tests
+        
