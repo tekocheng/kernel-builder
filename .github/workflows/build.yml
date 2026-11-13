@@ -9,6 +9,10 @@ on:
         default: marble
         options:
           - marble
+      kernel_name:
+        description: "Custom kernel name (CONFIG_LOCALVERSION). Empty uses the device/tree default."
+        type: string
+        default: ""
       kernel_source:
         description: "Kernel source. Matches a key in config/sources.json, or custom."
         type: choice
@@ -57,13 +61,6 @@ on:
           - sukisu-ultra
           - resukisu
           - all
-      ksu_mode:
-        description: "builtin compiles the manager into the Image. lkm builds kernelsu.ko and leaves the Image without it (official KernelSU only, no SUSFS)."
-        type: choice
-        default: builtin
-        options:
-          - builtin
-          - lkm
       manager_ref:
         description: "Override the manager branch, tag, or commit"
         type: string
@@ -80,14 +77,10 @@ on:
         description: "SUSFS branch. Empty uses the device default (marble: gki-android12-5.10)."
         type: string
         default: ""
-      nomount:
-        description: "NoMount VFS redirection"
-        type: choice
-        default: off
-        options:
-          - off
-          - builtin
-          - lkm
+      enable_nomount:
+        description: "Include NoMount VFS redirection in the kernel image"
+        type: boolean
+        default: false
       nomount_ref:
         description: "NoMount branch or tag. Empty uses dev."
         type: string
@@ -157,7 +150,6 @@ jobs:
           CUSTOM_REF: ${{ inputs.custom_ref }}
           CUSTOM_FETCH: ${{ inputs.custom_fetch }}
           MANAGER: ${{ inputs.manager }}
-          KSU_MODE: ${{ inputs.ksu_mode }}
         run: bash scripts/build.sh
 
   build:
@@ -201,6 +193,7 @@ jobs:
       - name: Build
         env:
           DEVICE: ${{ inputs.device }}
+          KERNEL_NAME: ${{ inputs.kernel_name }}
           KERNEL_SOURCE: ${{ matrix.source }}
           SOURCE_REF: ${{ inputs.source_ref }}
           CUSTOM_REPO: ${{ inputs.custom_repo }}
@@ -209,11 +202,10 @@ jobs:
           CUSTOM_KERNEL_PATH: ${{ inputs.custom_kernel_path }}
           MANAGER: ${{ matrix.manager }}
           MANAGER_REF: ${{ inputs.manager_ref }}
-          KSU_MODE: ${{ inputs.ksu_mode }}
           ENABLE_SUSFS: ${{ inputs.enable_susfs }}
           SUSFS_REF: ${{ inputs.susfs_ref }}
           SUSFS_BRANCH: ${{ inputs.susfs_branch }}
-          NOMOUNT: ${{ inputs.nomount }}
+          ENABLE_NOMOUNT: ${{ inputs.enable_nomount }}
           NOMOUNT_REF: ${{ inputs.nomount_ref }}
           TOOLCHAIN: ${{ inputs.toolchain }}
           TOOLCHAIN_URL: ${{ inputs.toolchain_url }}
@@ -250,7 +242,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          mapfile -t files < <(find artifacts -type f \( -name '*.zip' -o -name '*.sha256' -o -name '*.ko' \))
+          mapfile -t files < <(find artifacts -type f \( -name '*.zip' -o -name '*.sha256' \))
           if (( ${#files[@]} == 0 )); then
             echo "::error::No zip files were produced"
             exit 1
