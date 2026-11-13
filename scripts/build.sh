@@ -538,6 +538,12 @@ make_kernel() {
     touch "${KERNEL_DIR}/.scmversion" "${out}/.scmversion"
     log "Kernel localversion: ${localver} (${KBUILD_BUILD_USER}@${KBUILD_BUILD_HOST})"
   fi
+  # Keep the source's own uname, only drop the "-dirty" suffix that patching adds.
+  local slv="${KERNEL_DIR}/scripts/setlocalversion"
+  if [[ -f "${slv}" ]]; then
+    sed -i -e "s/printf '%s' -dirty/:/" -e 's/res="\$res-dirty"/:/' "${slv}"
+    grep -n -- '-dirty' "${slv}" >/dev/null && log "Warning: setlocalversion still mentions -dirty" || true
+  fi
   if [[ "${MANAGER}" != "none" ]]; then
     ( cd "${KERNEL_DIR}" && "${cfg[@]}" -e KSU )
   fi
