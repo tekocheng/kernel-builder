@@ -143,7 +143,7 @@ jobs:
       matrix: ${{ steps.gen.outputs.matrix }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Expand source and manager matrix
         id: gen
@@ -170,7 +170,7 @@ jobs:
       matrix: ${{ fromJSON(needs.matrix.outputs.matrix) }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Free disk and add swap
         run: |
@@ -187,7 +187,7 @@ jobs:
           df -h /
 
       - name: Restore toolchain and ccache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             toolchains
@@ -224,7 +224,7 @@ jobs:
 
       - name: Upload build outputs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ inputs.device }}-${{ matrix.source }}-${{ matrix.manager }}-r${{ github.run_number }}
           path: release/
@@ -240,7 +240,7 @@ jobs:
       contents: write
     steps:
       - name: Download zips
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v6
         with:
           pattern: ${{ inputs.device }}-*-r${{ github.run_number }}
           path: artifacts
