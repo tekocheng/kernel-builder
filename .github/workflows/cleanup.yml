@@ -1,0 +1,53 @@
+name: Cleanup runs
+
+on:
+  workflow_dispatch:
+    inputs:
+      keep_latest:
+        description: "Number of newest finished runs to keep (0 = delete all finished runs)"
+        required: true
+        default: "0"
+      dry_run:
+        description: "List runs that would be deleted without deleting them"
+        type: boolean
+        default: false
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: cleanup-runs
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Delete finished workflow runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          KEEP: ${{ inputs.keep_latest }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          [[ "${KEEP}" =~ ^[0-9]+$ ]] || { echo "::error::keep_latest must be a number"; exit 1; }
+
+          # Only completed runs are listed, so queued and in-progress runs (including this one) are never touched.
+          # The API returns newest first; skip the first KEEP entries and delete the rest.
+          mapfile -t ids < <(
+            gh api --paginate "repos/${REPO}/actions/runs?status=completed&per_page=100" \
+              --jq '.workflow_runs[].id' | tail -n "+$((KEEP + 1))"
+          )
+
+          echo "Finished runs to delete: ${#ids[@]} (keeping newest ${KEEP})"
+          for id in "${ids[@]}"; do
+            if [[ "${DRY_RUN}" == "true" ]]; then
+              echo "[dry-run] run ${id}"
+            else
+              gh api -X DELETE "repos/${REPO}/actions/runs/${id}" >/dev/null && echo "deleted run ${id}" \
+                || echo "::warning::could not delete run ${id}"
+            fi
+          done
