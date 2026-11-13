@@ -23,8 +23,7 @@ jobs:
         run: python3 -m unittest discover -s tests -v
 
       - name: Check shell syntax
-        run: bash -n scripts/build.sh
+        run: bash -n scripts/build.sh scripts/techpack.sh
 
       - name: Check Python syntax
         run: python3 -m compileall -q scripts tests
-        
