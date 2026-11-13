@@ -150,9 +150,9 @@ The current device configuration points to [simonpunk/susfs4ksu](https://gitlab.
 
 ## NoMount
 
-NoMount is controlled by the Boolean `enable_nomount` input; there are no `off` / `builtin` / `lkm` choices. When enabled, the builder downloads and runs `kernel/setup.sh` from the device's configured NoMount repository/ref (for marble: [maxsteeel/nomount](https://github.com/maxsteeel/nomount), `dev`), then enables `CONFIG_NOMOUNT=y` and verifies that it remains enabled after `olddefconfig`.
+NoMount is controlled by the Boolean `enable_nomount` input. When enabled, the builder downloads and runs `kernel/setup.sh` from the device's configured NoMount repository/ref (for marble: [maxsteeel/nomount](https://github.com/maxsteeel/nomount), `dev`), then enables `CONFIG_NOMOUNT=y` and verifies that it remains enabled after `olddefconfig`.
 
-**NoMount is built into the kernel image.** The current workflow does not compile or upload a separate `nomount.ko` file.
+**NoMount is integrated directly into the kernel image.** The current workflow supports this built-in integration only; it does not provide a separate-module build mode.
 
 ## Build scope
 
