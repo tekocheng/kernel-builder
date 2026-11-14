@@ -534,15 +534,18 @@ make_kernel() {
   if [[ -n "${KERNEL_NAME}" ]]; then
     local localver="${KERNEL_NAME}"
     [[ "${localver}" == -* ]] || localver="-${localver}"
-    ( cd "${KERNEL_DIR}" && "${cfg[@]}" --set-str LOCALVERSION "${localver}" -d LOCALVERSION_AUTO ) || true
-    touch "${KERNEL_DIR}/.scmversion" "${out}/.scmversion"
+    ( cd "${KERNEL_DIR}" && "${cfg[@]}" --set-str LOCALVERSION "${localver}" ) || true
     log "Kernel localversion: ${localver} (${KBUILD_BUILD_USER}@${KBUILD_BUILD_HOST})"
   fi
-  # Keep the source's own uname, only drop the "-dirty" suffix that patching adds.
-  local slv="${KERNEL_DIR}/scripts/setlocalversion"
-  if [[ -f "${slv}" ]]; then
-    sed -i -e "s/printf '%s' -dirty/:/" -e 's/res="\$res-dirty"/:/' "${slv}"
-    grep -n -- '-dirty' "${slv}" >/dev/null && log "Warning: setlocalversion still mentions -dirty" || true
+  # uname suffix like -g<hash12>-ab<run id>. .scmversion replaces the git detection in
+  # scripts/setlocalversion, so no "-dirty" is ever appended.
+  ( cd "${KERNEL_DIR}" && "${cfg[@]}" -e LOCALVERSION_AUTO ) || true
+  local sha scm
+  if sha="$(git -C "${KERNEL_DIR}" rev-parse --short=12 HEAD 2>/dev/null)"; then
+    scm="-g${sha}-ab${GITHUB_RUN_ID:-0}"
+    printf '%s' "${scm}" > "${KERNEL_DIR}/.scmversion"
+    printf '%s' "${scm}" > "${out}/.scmversion"
+    log "uname suffix: ${scm}"
   fi
   if [[ "${MANAGER}" != "none" ]]; then
     ( cd "${KERNEL_DIR}" && "${cfg[@]}" -e KSU )
