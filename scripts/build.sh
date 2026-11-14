@@ -615,9 +615,13 @@ EOF
   cp -f "${image}" "${RELEASE}/$(basename "${image}")"
   log "Image ${bytes} bytes"
 
-  # Record the kernel version string for the Actions summary.
-  cat "${out}/include/config/kernel.release" > "${RELEASE}/kernel-release.txt" 2>/dev/null || : > "${RELEASE}/kernel-release.txt"
-  gzip -cdf "${image}" 2>/dev/null | grep -a -m1 -o 'Linux version [[:print:]]*' > "${RELEASE}/proc-version.txt" || true
+  # Record the kernel version string for the Actions summary. The binary holds the format
+  # string "Linux version %s (%s)" first, so only match a banner that starts with a digit.
+  gzip -cdf "${image}" 2>/dev/null | grep -a -m1 -o 'Linux version [0-9][[:print:]]*' > "${RELEASE}/proc-version.txt" || true
+  awk 'NR==1 {print $3}' "${RELEASE}/proc-version.txt" > "${RELEASE}/kernel-release.txt"
+  if [[ ! -s "${RELEASE}/kernel-release.txt" ]]; then
+    cat "${out}/include/config/kernel.release" > "${RELEASE}/kernel-release.txt" 2>/dev/null || true
+  fi
   log "Kernel release: $(cat "${RELEASE}/kernel-release.txt")"
 
   if [[ "${BUILD_SCOPE}" == "full" ]]; then
@@ -734,7 +738,7 @@ PYAK
     {
       echo "### ${name}"
       echo
-      echo "**Kernel uname:** `$(cat "${RELEASE}/kernel-release.txt" 2>/dev/null)`"
+      echo "**Kernel uname:** \`$(cat "${RELEASE}/kernel-release.txt" 2>/dev/null)\`"
       echo
       echo '```'
       cat "${RELEASE}/proc-version.txt" 2>/dev/null
