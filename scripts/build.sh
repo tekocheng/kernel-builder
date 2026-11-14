@@ -615,6 +615,11 @@ EOF
   cp -f "${image}" "${RELEASE}/$(basename "${image}")"
   log "Image ${bytes} bytes"
 
+  # Record the kernel version string for the Actions summary.
+  cat "${out}/include/config/kernel.release" > "${RELEASE}/kernel-release.txt" 2>/dev/null || : > "${RELEASE}/kernel-release.txt"
+  gzip -cdf "${image}" 2>/dev/null | grep -a -m1 -o 'Linux version [[:print:]]*' > "${RELEASE}/proc-version.txt" || true
+  log "Kernel release: $(cat "${RELEASE}/kernel-release.txt")"
+
   if [[ "${BUILD_SCOPE}" == "full" ]]; then
     build_techpack "${cc}" "${jobs}" "${out}"
 
@@ -728,6 +733,12 @@ PYAK
   if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
     {
       echo "### ${name}"
+      echo
+      echo "**Kernel uname:** `$(cat "${RELEASE}/kernel-release.txt" 2>/dev/null)`"
+      echo
+      echo '```'
+      cat "${RELEASE}/proc-version.txt" 2>/dev/null
+      echo '```'
       echo
       echo '```'
       cat "${RELEASE}/build-info.txt"
