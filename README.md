@@ -38,7 +38,7 @@ The values below match the inputs declared in `.github/workflows/build.yml`.
 | Input | Available values / default | Description |
 |---|---|---|
 | `device` | `marble` (default) | Device config file: `config/devices/marble.env`. Add a workflow dropdown option when adding another device. |
-| `kernel_name` | Text / empty | Overrides `CONFIG_LOCALVERSION`. Empty keeps the source's own version string (the `-dirty` suffix is always removed). A leading `-` is added automatically when needed. |
+| `kernel_name` | Text / empty | Overrides `CONFIG_LOCALVERSION`. Empty keeps the source's own `CONFIG_LOCALVERSION`. The uname always ends with `-g<hash12>-ab<run id>` and never `-dirty`. A leading `-` is added automatically when needed. |
 | `kernel_source` | `aospa` (default), `aosp`, `melt`, `bouquet`, `custom` | Selects a key in `config/sources.json`, or a one-off custom source. |
 | `all_sources` | `false` (default) | Builds every entry in `config/sources.json`. It cannot be combined with `kernel_source=custom`; when enabled, the selected source is replaced by the configured source list. |
 | `source_ref` | Text / empty | Overrides a source revision. For a Git source it overrides the kernel repository ref. For a predefined manifest source it overrides only the kernel project revision, not the manifest revision or every project in the manifest. Custom-source behavior is described below. |
