@@ -111,6 +111,11 @@ def uname_suffix_enabled(entry: dict) -> bool:
     return entry.get("uname_suffix", True) is not False
 
 
+def builtin_nomount(entry: dict) -> bool:
+    """A source can set "builtin_nomount": true when NoMount is already part of its kernel tree."""
+    return entry.get("builtin_nomount", False) is True
+
+
 def source_entry(key: str, args: argparse.Namespace) -> dict:
     if key == "custom":
         repo = validate_repo_target(args.custom_repo, "custom_repo") if args.custom_repo.strip() else ""
@@ -261,6 +266,7 @@ def write_plan(args: argparse.Namespace) -> None:
         "SOURCE_REF_OVERRIDE": require_single_line(args.source_ref.strip(), "source_ref"),
         "DEFCONFIG_MODE": mode,
         "UNAME_SUFFIX": "true" if uname_suffix_enabled(entry) else "false",
+        "BUILTIN_NOMOUNT": "true" if builtin_nomount(entry) else "false",
         "TOOLCHAIN": toolchain,
         "TOOLCHAIN_URL": toolchain_entry["url"],
         "TOOLCHAIN_SHA256": toolchain_entry.get("sha256", ""),
