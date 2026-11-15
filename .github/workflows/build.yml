@@ -21,6 +21,7 @@ on:
           - aospa
           - aosp
           - lineage
+          - shinkai
           - melt
           - bouquet
           - custom
@@ -95,6 +96,7 @@ on:
           - android-r596125
           - llvm-23.1.5
           - llvm-slim-23.1.5
+          - alchemist-llvm-23
       toolchain_url:
         description: "Optional https link to a clang archive (tar.gz, tar.xz). Overrides toolchain for this run only."
         type: string
