@@ -91,6 +91,7 @@ def validate() -> list[str]:
         require(bool(source.get("rom")), f"Source '{key}' needs rom label")
         require(source.get("defconfig_mode", "auto") in {"auto", "single", "gki_fragments"}, f"Source '{key}' has invalid defconfig_mode")
         require(source.get("toolchain", "") in toolchains, f"Source '{key}' refers to unknown toolchain '{source.get('toolchain')}'")
+        require(isinstance(source.get("uname_suffix", True), bool), f"Source '{key}' uname_suffix must be true or false")
         if source["fetch"] == "git":
             require(bool(source.get("repo")) and bool(source.get("ref")), f"Git source '{key}' needs repo and ref")
         else:
