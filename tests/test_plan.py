@@ -53,6 +53,11 @@ class PlanResolutionTests(unittest.TestCase):
         self.assertEqual(entry["manifest_ref"], "manifest-branch")
         self.assertEqual(entry["kernel_path"], "kernel_platform/xiaomi/sm8450")
 
+    def test_uname_suffix_defaults_on_and_bouquet_opts_out(self) -> None:
+        self.assertTrue(plan.uname_suffix_enabled({}))
+        self.assertTrue(plan.uname_suffix_enabled(plan.SOURCES["aosp"]))
+        self.assertFalse(plan.uname_suffix_enabled(plan.SOURCES["bouquet"]))
+
     def test_manager_susfs_specific_ref(self) -> None:
         result = plan.resolve_manager("sukisu-ultra", True, "")
         self.assertEqual(result["MANAGER_REF"], "builtin")
