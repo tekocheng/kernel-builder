@@ -58,6 +58,18 @@ class PlanResolutionTests(unittest.TestCase):
         self.assertTrue(plan.uname_suffix_enabled(plan.SOURCES["aosp"]))
         self.assertFalse(plan.uname_suffix_enabled(plan.SOURCES["bouquet"]))
 
+    def test_shinkai_uses_its_own_fragments(self) -> None:
+        device = plan.load_device("marble")
+        self.assertIn("vendor/xiaomi_GKI.config", plan.fragments_for(plan.SOURCES["lineage"], device))
+        shinkai = plan.fragments_for(plan.SOURCES["shinkai"], device).split()
+        self.assertNotIn("vendor/xiaomi_GKI.config", shinkai)
+        self.assertEqual(shinkai[-1], "vendor/extra.config")
+
+    def test_builtin_nomount_is_opt_in_per_source(self) -> None:
+        self.assertFalse(plan.builtin_nomount({}))
+        self.assertFalse(plan.builtin_nomount(plan.SOURCES["aosp"]))
+        self.assertTrue(plan.builtin_nomount(plan.SOURCES["shinkai"]))
+
     def test_manager_susfs_specific_ref(self) -> None:
         result = plan.resolve_manager("sukisu-ultra", True, "")
         self.assertEqual(result["MANAGER_REF"], "builtin")
