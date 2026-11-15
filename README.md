@@ -226,6 +226,8 @@ Add a source object to [`config/sources.json`](config/sources.json). To select i
 }
 ```
 
+`uname_suffix` (optional, default `true`) controls the `-g<hash12>-ab<run id>` uname suffix. Set it to `false` for sources whose kernel modules are tied to the exact release string (currently `bouquet`), so the source's own release string is kept.
+
 `extra` repositories are cloned after the main Git tree, to paths relative to the kernel directory. `modules_src` is also relative to the kernel directory; `modules_list` is relative to the repository root.
 
 ### Manifest source example
