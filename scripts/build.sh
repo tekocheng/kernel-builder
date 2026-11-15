@@ -8,6 +8,7 @@ cd "${ROOT}"
 
 DEVICE="${DEVICE:-marble}"
 KERNEL_NAME="${KERNEL_NAME:-}"
+UNAME_SUFFIX="${UNAME_SUFFIX:-true}"
 KERNEL_SOURCE="${KERNEL_SOURCE:-aosp}"
 SOURCE_REF="${SOURCE_REF:-}"
 CUSTOM_REPO="${CUSTOM_REPO:-}"
@@ -538,14 +539,19 @@ make_kernel() {
     log "Kernel localversion: ${localver} (${KBUILD_BUILD_USER}@${KBUILD_BUILD_HOST})"
   fi
   # uname suffix like -g<hash12>-ab<run id>. .scmversion replaces the git detection in
-  # scripts/setlocalversion, so no "-dirty" is ever appended.
-  ( cd "${KERNEL_DIR}" && "${cfg[@]}" -e LOCALVERSION_AUTO ) || true
-  local sha scm
-  if sha="$(git -C "${KERNEL_DIR}" rev-parse --short=12 HEAD 2>/dev/null)"; then
-    scm="-g${sha}-ab${GITHUB_RUN_ID:-0}"
-    printf '%s' "${scm}" > "${KERNEL_DIR}/.scmversion"
-    printf '%s' "${scm}" > "${out}/.scmversion"
-    log "uname suffix: ${scm}"
+  # scripts/setlocalversion, so no "-dirty" is ever appended. Sources whose modules are tied to
+  # the exact release string set "uname_suffix": false in config/sources.json to skip this.
+  if [[ "${UNAME_SUFFIX}" == "true" ]]; then
+    ( cd "${KERNEL_DIR}" && "${cfg[@]}" -e LOCALVERSION_AUTO ) || true
+    local sha scm
+    if sha="$(git -C "${KERNEL_DIR}" rev-parse --short=12 HEAD 2>/dev/null)"; then
+      scm="-g${sha}-ab${GITHUB_RUN_ID:-0}"
+      printf '%s' "${scm}" > "${KERNEL_DIR}/.scmversion"
+      printf '%s' "${scm}" > "${out}/.scmversion"
+      log "uname suffix: ${scm}"
+    fi
+  else
+    log "uname suffix disabled for ${KERNEL_SOURCE}: keeping the source release string"
   fi
   if [[ "${MANAGER}" != "none" ]]; then
     ( cd "${KERNEL_DIR}" && "${cfg[@]}" -e KSU )
