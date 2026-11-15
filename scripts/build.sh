@@ -9,6 +9,7 @@ cd "${ROOT}"
 DEVICE="${DEVICE:-marble}"
 KERNEL_NAME="${KERNEL_NAME:-}"
 UNAME_SUFFIX="${UNAME_SUFFIX:-true}"
+BUILTIN_NOMOUNT="${BUILTIN_NOMOUNT:-false}"
 KERNEL_SOURCE="${KERNEL_SOURCE:-aosp}"
 SOURCE_REF="${SOURCE_REF:-}"
 CUSTOM_REPO="${CUSTOM_REPO:-}"
@@ -458,6 +459,10 @@ apply_susfs() {
 }
 
 apply_nomount() {
+  if [[ "${BUILTIN_NOMOUNT}" == "true" ]]; then
+    log "NoMount is built into ${KERNEL_SOURCE}: skipping the external NoMount setup"
+    return
+  fi
   if [[ "${ENABLE_NOMOUNT}" != "true" ]]; then
     log "NoMount disabled"
     return
@@ -559,7 +564,9 @@ make_kernel() {
   if [[ "${ENABLE_SUSFS}" == "true" ]]; then
     ( cd "${KERNEL_DIR}" && "${cfg[@]}" -e KSU_SUSFS )
   fi
-  if [[ "${ENABLE_NOMOUNT}" == "true" ]]; then
+  if [[ "${BUILTIN_NOMOUNT}" == "true" ]]; then
+    log "NoMount: keeping the source's own CONFIG_NOMOUNT setting"
+  elif [[ "${ENABLE_NOMOUNT}" == "true" ]]; then
     ( cd "${KERNEL_DIR}" && "${cfg[@]}" -e NOMOUNT )
   else
     ( cd "${KERNEL_DIR}" && "${cfg[@]}" -d NOMOUNT ) || true
