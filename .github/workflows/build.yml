@@ -20,6 +20,7 @@ on:
         options:
           - aospa
           - aosp
+          - lineage
           - melt
           - bouquet
           - custom
@@ -93,6 +94,7 @@ on:
           - auto
           - android-r596125
           - llvm-23.1.5
+          - llvm-slim-23.1.5
       toolchain_url:
         description: "Optional https link to a clang archive (tar.gz, tar.xz). Overrides toolchain for this run only."
         type: string
