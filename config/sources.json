@@ -7,7 +7,11 @@
     "manifest_ref": "calcite-xiaomi-sm8450",
     "manifest_file": "default.xml",
     "kernel_path": "kernel_platform/xiaomi/sm8450",
-    "manifest_skip": ["prebuilts/clang", "prebuilts-master", "gcc/linux-x86"],
+    "manifest_skip": [
+      "prebuilts/clang",
+      "prebuilts-master",
+      "gcc/linux-x86"
+    ],
     "defconfig_mode": "gki_fragments",
     "toolchain": "android-r596125",
     "modules_src": "../sm8450-modules/qcom/opensource",
@@ -37,6 +41,29 @@
       }
     ]
   },
+  "lineage": {
+    "display": "LineageOS",
+    "rom": "LineageOS official",
+    "fetch": "git",
+    "repo": "LineageOS/android_kernel_xiaomi_sm8450",
+    "ref": "lineage-24.0",
+    "defconfig_mode": "gki_fragments",
+    "toolchain": "llvm-23.1.5",
+    "modules_src": "../sm8450-modules/qcom/opensource",
+    "modules_list": "config/techpack-sm8450.txt",
+    "extra": [
+      {
+        "repo": "LineageOS/android_kernel_xiaomi_sm8450-modules",
+        "ref": "lineage-24.0",
+        "dest": "../sm8450-modules"
+      },
+      {
+        "repo": "LineageOS/android_kernel_xiaomi_sm8450-devicetrees",
+        "ref": "lineage-24.0",
+        "dest": "../sm8450-devicetrees"
+      }
+    ]
+  },
   "melt": {
     "display": "Melt",
     "rom": "HyperOS",
@@ -48,7 +75,7 @@
     "toolchain": "llvm-23.1.5",
     "notes": "Single-tree HyperOS kernel. Flash the Image on stock HyperOS only."
   },
-    "bouquet": {
+  "bouquet": {
     "display": "Bouquet",
     "rom": "AOSP / LOS-based",
     "fetch": "git",
