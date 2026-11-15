@@ -64,6 +64,30 @@
       }
     ]
   },
+  "shinkai": {
+    "display": "Shinkai",
+    "rom": "AOSP / Shinkai Project",
+    "fetch": "git",
+    "repo": "nekoshirro/platform_kernel_xiaomi_marble",
+    "ref": "17",
+    "defconfig_mode": "gki_fragments",
+    "toolchain": "llvm-23.1.5",
+    "modules_src": "../sm8450-modules/qcom/opensource",
+    "modules_list": "config/techpack-sm8450.txt",
+    "extra": [
+      {
+        "repo": "nekoshirro/platform_kernel_xiaomi_marble-modules",
+        "ref": "16",
+        "dest": "../sm8450-modules"
+      },
+      {
+        "repo": "nekoshirro/platform_kernel_xiaomi_marble-devicetrees",
+        "ref": "16",
+        "dest": "../sm8450-devicetrees"
+      }
+    ],
+    "notes": "Kernel branch 17 (Android 17). The modules and devicetrees repos only publish branch 16; use source_ref=16 to build the kernel from branch 16 as well."
+  },
   "melt": {
     "display": "Melt",
     "rom": "HyperOS",
