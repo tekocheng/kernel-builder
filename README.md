@@ -39,7 +39,7 @@ The values below match the inputs declared in `.github/workflows/build.yml`.
 |---|---|---|
 | `device` | `marble` (default) | Device config file: `config/devices/marble.env`. Add a workflow dropdown option when adding another device. |
 | `kernel_name` | Text / empty | Overrides `CONFIG_LOCALVERSION`. Empty keeps the source's own `CONFIG_LOCALVERSION`. The uname always ends with `-g<hash12>-ab<run id>` and never `-dirty`. A leading `-` is added automatically when needed. |
-| `kernel_source` | `aospa` (default), `aosp`, `lineage`, `melt`, `bouquet`, `custom` | Selects a key in `config/sources.json`, or a one-off custom source. |
+| `kernel_source` | `aospa` (default), `aosp`, `lineage`, `shinkai`, `melt`, `bouquet`, `custom` | Selects a key in `config/sources.json`, or a one-off custom source. |
 | `all_sources` | `false` (default) | Builds every entry in `config/sources.json`. It cannot be combined with `kernel_source=custom`; when enabled, the selected source is replaced by the configured source list. |
 | `source_ref` | Text / empty | Overrides a source revision. For a Git source it overrides the kernel repository ref. For a predefined manifest source it overrides only the kernel project revision, not the manifest revision or every project in the manifest. Custom-source behavior is described below. |
 | `custom_repo` | Text / empty | Required for `kernel_source=custom`. Use `owner/repository` or a supported Git URL. For `custom_fetch=manifest`, this is the manifest repository. |
@@ -53,7 +53,7 @@ The values below match the inputs declared in `.github/workflows/build.yml`.
 | `susfs_branch` | Text / empty | SUSFS branch to fetch. Empty uses the device default; for `marble`, `gki-android12-5.10`. |
 | `enable_nomount` | `false` (default), `true` | Integrates NoMount into the kernel. This is a built-in kernel option, not a separate module build. |
 | `nomount_ref` | Text / empty | NoMount branch or tag. Empty uses the device default; for `marble`, `dev`. |
-| `toolchain` | `auto` (default), `android-r596125`, `llvm-23.1.5`, `llvm-slim-23.1.5` | Selects a toolchain from `config/toolchains.json`. `auto` prefers the source's configured toolchain, then the global default. |
+| `toolchain` | `auto` (default), `android-r596125`, `llvm-23.1.5`, `llvm-slim-23.1.5`, `alchemist-llvm-23` | Selects a toolchain from `config/toolchains.json`. `auto` prefers the source's configured toolchain, then the global default. |
 | `toolchain_url` | HTTPS URL / empty | Optional direct link to a `.tar.gz` or `.tar.xz` compiler archive. When supplied, it overrides `toolchain` for that run. The archive must contain `bin/clang` at its root or within the supported directory depth. The URL must be HTTPS; embedded username/password credentials are rejected. The workflow log and build metadata do not expose URL credentials, query strings, or fragments. The uploaded `plan.env` is sanitized by an exit trap, including when a later build step fails. |
 | `toolchain_sha256` | 64-character SHA-256 / empty | Optional expected checksum for the selected archive. A mismatch stops the build before extraction. When omitted, the builder still records the downloaded archive's actual checksum but cannot verify it against a trusted expected value. |
 | `lto` | `thin` (default), `none`, `full` | Selects the kernel LTO configuration. See [LTO](#lto). |
@@ -84,6 +84,7 @@ The predefined sources are declared in [`config/sources.json`](config/sources.js
 | `aospa` | [aospa-shadedark/kernel_manifest](https://github.com/aospa-shadedark/kernel_manifest), `calcite-xiaomi-sm8450` | `manifest` | Paranoid Android (Calcite) | `android-r596125` |
 | `aosp` | [aosp-pablo/android_kernel_xiaomi_sm8450](https://github.com/aosp-pablo/android_kernel_xiaomi_sm8450), `17` | `git` | AOSP / LOS-based | `llvm-23.1.5` |
 | `lineage` | [LineageOS/android_kernel_xiaomi_sm8450](https://github.com/LineageOS/android_kernel_xiaomi_sm8450), `lineage-24.0` | `git` | LineageOS official | `llvm-23.1.5` |
+| `shinkai` | [nekoshirro/platform_kernel_xiaomi_marble](https://github.com/nekoshirro/platform_kernel_xiaomi_marble), `17` (modules and devicetrees from branch `16`) | `git` | AOSP / Shinkai Project | `llvm-23.1.5` |
 | `melt` | [Pzqqt/android_kernel_xiaomi_marble](https://github.com/Pzqqt/android_kernel_xiaomi_marble), `melt-rebase` | `git` | HyperOS | `llvm-23.1.5` |
 | `bouquet` | [Pzqqt/android_kernel_xiaomi_marble](https://github.com/Pzqqt/android_kernel_xiaomi_marble), `bouquet_ci` | `git` | AOSP / LOS-based | `llvm-23.1.5` |
 
@@ -106,6 +107,7 @@ Toolchain definitions live in [`config/toolchains.json`](config/toolchains.json)
 | `android-r596125` | [Neebe3289/aosp-clang](https://github.com/Neebe3289/aosp-clang), release `clang-22.0.2-15682573` | AOSP Clang 22.0.2 based on Android r596125. |
 | `llvm-23.1.5` | [LLVM Project](https://github.com/llvm/llvm-project/releases/tag/llvmorg-23.1.5) | Upstream LLVM 23.1.5; `max_jobs=2` caps parallel make jobs for this toolchain. It is marked as the global default. |
 | `llvm-slim-23.1.5` | [kernel.org slim LLVM](https://mirrors.edge.kernel.org/pub/tools/llvm/) | Slim LLVM 23.1.5 (`llvm-23.1.5-x86_64.tar.xz`); `max_jobs=2`. Not a default. |
+| `alchemist-llvm-23` | [nekoshirro/Alchemist-LLVM](https://github.com/nekoshirro/Alchemist-LLVM) | Alchemist LLVM 23 (clang 23.0.1), release `lto-20261105`, pinned by SHA-256; `max_jobs=2`. Not a default. |
 
 The builder downloads and safely extracts the selected archive, locates `bin/clang`, and adds that toolchain's `bin` directory to `PATH`. Archive paths and links are checked before extraction. The workflow caches the `toolchains/` directory using a cache identity that includes the toolchain URL and expected checksum. A `toolchain_url` override takes precedence over the named toolchain and is stored in a URL-derived toolchain directory. Supply `toolchain_sha256` when a trusted checksum is available; a cached archive is reused only when its recorded checksum matches the expected value.
 
@@ -163,7 +165,7 @@ NoMount is controlled by the Boolean `enable_nomount` input. When enabled, the b
 | `image-only` | Kernel image only. This is the default and is the image packaged into AnyKernel3. |
 | `full` | Kernel image, in-tree `modules` and `dtbs` targets, plus external techpack modules when the selected source defines `modules_src` and `modules_list`. |
 
-The SM8450 techpack module list is [`config/techpack-sm8450.txt`](config/techpack-sm8450.txt). It is used only by sources that reference it in `config/sources.json` (currently `aospa`, `aosp` and `lineage`). Missing individual module directories in that list are skipped with a warning. `melt` and `bouquet` do not currently define that external techpack list.
+The SM8450 techpack module list is [`config/techpack-sm8450.txt`](config/techpack-sm8450.txt). It is used only by sources that reference it in `config/sources.json` (currently `aospa`, `aosp`, `lineage` and `shinkai`). Missing individual module directories in that list are skipped with a warning. `melt` and `bouquet` do not currently define that external techpack list.
 
 When files are produced, `full` adds `modules.tar.gz` and/or `dtbs.tar.gz` to the build outputs. These archives are not inserted into the AnyKernel3 ZIP. Missing techpack directories remain optional and are skipped with a warning; the exact missing entries are written to `skipped-techpack.txt` so partial techpack coverage is visible in the artifact.
 
@@ -348,6 +350,7 @@ This repository coordinates and automates the work of the projects below. Credit
 **Kernel sources**
 
 - [aospa-shadedark](https://github.com/aospa-shadedark): AOSPA kernel manifest and SM8450 kernel trees; the manifest also pulls build tooling from [pa-gr](https://github.com/pa-gr).
+- [nekoshirro](https://github.com/nekoshirro): Shinkai Project kernel (`platform_kernel_xiaomi_marble`) with its modules and devicetrees, and the Alchemist LLVM toolchain.
 - [LineageOS](https://github.com/LineageOS): official SM8450 kernel, modules, and device trees (`lineage-24.0`).
 - [aosp-pablo](https://github.com/aosp-pablo): AOSP / LineageOS-based SM8450 kernel, modules, and device trees.
 - [Pzqqt](https://github.com/Pzqqt): Melt and Bouquet kernels for marble.
