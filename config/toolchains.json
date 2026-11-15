@@ -13,5 +13,11 @@
     "url": "https://mirrors.edge.kernel.org/pub/tools/llvm/files/llvm-23.1.5-x86_64.tar.xz",
     "max_jobs": 2,
     "notes": "Slim LLVM 23.1.5 from kernel.org (smaller download, built for kernel use). Make jobs are capped like the upstream LLVM entry."
+  },
+  "alchemist-llvm-23": {
+    "url": "https://github.com/nekoshirro/Alchemist-LLVM/releases/download/lto-20261105/Alchemist-LLVM-23-20261105.tar.xz",
+    "sha256": "b1ee424a42240ca381f8feea16e4d70c7e48d0a06e55f3463a77984901061c52",
+    "max_jobs": 2,
+    "notes": "Alchemist LLVM 23 (clang 23.0.1), release lto-20261105 from nekoshirro/Alchemist-LLVM. Pinned by SHA-256. Make jobs are capped like the other LLVM entries."
   }
 }
