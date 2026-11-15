@@ -106,6 +106,11 @@ def truthy(value: str) -> bool:
     return str(value).strip().lower() in {"1", "true", "yes", "y", "on"}
 
 
+def uname_suffix_enabled(entry: dict) -> bool:
+    """A source can set "uname_suffix": false to keep the kernel release string untouched."""
+    return entry.get("uname_suffix", True) is not False
+
+
 def source_entry(key: str, args: argparse.Namespace) -> dict:
     if key == "custom":
         repo = validate_repo_target(args.custom_repo, "custom_repo") if args.custom_repo.strip() else ""
@@ -255,6 +260,7 @@ def write_plan(args: argparse.Namespace) -> None:
         "MANIFEST_SKIP": " ".join(entry.get("manifest_skip", [])),
         "SOURCE_REF_OVERRIDE": require_single_line(args.source_ref.strip(), "source_ref"),
         "DEFCONFIG_MODE": mode,
+        "UNAME_SUFFIX": "true" if uname_suffix_enabled(entry) else "false",
         "TOOLCHAIN": toolchain,
         "TOOLCHAIN_URL": toolchain_entry["url"],
         "TOOLCHAIN_SHA256": toolchain_entry.get("sha256", ""),
