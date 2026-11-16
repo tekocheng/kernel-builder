@@ -556,7 +556,11 @@ make_kernel() {
       log "uname suffix: ${scm}"
     fi
   else
-    log "uname suffix disabled for ${KERNEL_SOURCE}: keeping the source release string"
+    # An empty .scmversion stops setlocalversion from adding "+", "-g<hash>" or "-dirty",
+    # so the release is just the kernel version plus the source's CONFIG_LOCALVERSION.
+    : > "${KERNEL_DIR}/.scmversion"
+    : > "${out}/.scmversion"
+    log "uname suffix disabled for ${KERNEL_SOURCE}: release is the source's own version string"
   fi
   if [[ "${MANAGER}" != "none" ]]; then
     ( cd "${KERNEL_DIR}" && "${cfg[@]}" -e KSU )
