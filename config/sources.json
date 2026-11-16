@@ -78,6 +78,7 @@
       "vendor/extra.config"
     ],
     "builtin_nomount": true,
+    "uname_suffix": false,
     "toolchain": "llvm-23.1.5",
     "modules_src": "../sm8450-modules/qcom/opensource",
     "modules_list": "config/techpack-sm8450.txt",
