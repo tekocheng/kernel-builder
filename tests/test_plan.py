@@ -57,6 +57,7 @@ class PlanResolutionTests(unittest.TestCase):
         self.assertTrue(plan.uname_suffix_enabled({}))
         self.assertTrue(plan.uname_suffix_enabled(plan.SOURCES["aosp"]))
         self.assertFalse(plan.uname_suffix_enabled(plan.SOURCES["bouquet"]))
+        self.assertFalse(plan.uname_suffix_enabled(plan.SOURCES["shinkai"]))
 
     def test_shinkai_uses_its_own_fragments(self) -> None:
         device = plan.load_device("marble")
