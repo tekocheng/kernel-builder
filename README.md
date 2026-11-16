@@ -228,7 +228,7 @@ Add a source object to [`config/sources.json`](config/sources.json). To select i
 }
 ```
 
-`uname_suffix` (optional, default `true`) controls the `-g<hash12>-ab<run id>` uname suffix. Set it to `false` for sources whose kernel modules are tied to the exact release string (currently `bouquet`), so the source's own release string is kept.
+`uname_suffix` (optional, default `true`) controls the `-g<hash12>-ab<run id>` uname suffix. Set it to `false` to get the plain release string (kernel version plus the source's `CONFIG_LOCALVERSION`, for example `5.10.272-[Re]Shinomiya`) with no `+`, hash, run id or `-dirty`. Currently `false` for `shinkai` and `bouquet` (whose modules are tied to the exact release string).
 
 `builtin_nomount` (optional, default `false`) marks a source whose kernel tree already contains NoMount (currently `shinkai`). For such a source the builder skips the external NoMount setup and no longer forces `CONFIG_NOMOUNT` off, so the source's own setting is kept.
 
