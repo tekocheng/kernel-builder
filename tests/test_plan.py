@@ -211,7 +211,7 @@ class MatrixTests(unittest.TestCase):
             plan.emit_matrix(args)
         payload = json.loads(output.getvalue())
         self.assertEqual(len(payload["include"]), len(plan.SOURCES) * len(plan.MANAGERS))
-        self.assertEqual(len(payload["include"]), 30)
+        self.assertEqual(len(payload["include"]), 35)
 
     def test_warns_when_one_checksum_covers_different_auto_toolchains(self) -> None:
         args = SimpleNamespace(
