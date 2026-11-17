@@ -96,6 +96,30 @@
     ],
     "notes": "Kernel branch 17 (Android 17). The modules and devicetrees repos only publish branch 16; use source_ref=16 to build the kernel from branch 16 as well."
   },
+  "lunaris": {
+    "display": "Lunaris",
+    "rom": "Lunaris AOSP",
+    "fetch": "git",
+    "repo": "dhanush281/android_kernel_xiaomi_sm8450",
+    "ref": "lineage-23.2",
+    "defconfig_mode": "gki_fragments",
+    "toolchain": "llvm-23.1.5",
+    "modules_src": "../sm8450-modules/qcom/opensource",
+    "modules_list": "config/techpack-sm8450.txt",
+    "extra": [
+      {
+        "repo": "dhanush281/android_kernel_xiaomi_sm8450-modules",
+        "ref": "16.2",
+        "dest": "../sm8450-modules"
+      },
+      {
+        "repo": "dhanush281/android_kernel_xiaomi_sm8450-devicetrees",
+        "ref": "16.2",
+        "dest": "../sm8450-devicetrees"
+      }
+    ],
+    "notes": "Kernel branch lineage-23.2 (Android 16 QPR2) with the matching 16.2 modules and devicetrees branches. The kernel branch lineage-24.0 is identical to the official LineageOS source."
+  },
   "melt": {
     "display": "Melt",
     "rom": "HyperOS",
