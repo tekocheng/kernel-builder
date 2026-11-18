@@ -235,6 +235,10 @@ Add a source object to [`config/sources.json`](config/sources.json). To select i
 
 `extra` repositories are cloned after the main Git tree, to paths relative to the kernel directory. `modules_src` is also relative to the kernel directory; `modules_list` is relative to the repository root.
 
+### Telegram notifications
+
+Each build job can send a Telegram message when it succeeds, fails, or is cancelled. It is off until you add two repository secrets (Settings, Secrets and variables, Actions): `TELEGRAM_BOT_TOKEN` (from @BotFather) and `TELEGRAM_CHAT_ID` (your chat or channel ID; send the bot a message first). Without the secrets the step is skipped. The message names the device, source, and manager, and includes the kernel uname, the zip name, and the run link when they exist. A failed notification never fails the build. With `all_sources`, expect one message per build.
+
 ### Manifest source example
 
 ```json
