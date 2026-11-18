@@ -11,7 +11,7 @@ SCRIPT = ROOT / "scripts" / "notify_telegram.sh"
 STUB = """#!/usr/bin/env bash
 printf '%s\n' "$@" > "$STUB_DIR/args.txt"
 cat > "$STUB_DIR/stdin.txt"
-exit "\${STUB_EXIT:-0}"
+exit "${STUB_EXIT:-0}"
 """
 
 
