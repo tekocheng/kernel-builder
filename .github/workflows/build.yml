@@ -251,6 +251,20 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+      - name: Notify Telegram
+        if: always()
+        continue-on-error: true
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          JOB_STATUS: ${{ job.status }}
+          DEVICE: ${{ inputs.device }}
+          SOURCE: ${{ matrix.source }}
+          MANAGER: ${{ matrix.manager }}
+          RUN_NUMBER: ${{ github.run_number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: bash scripts/notify_telegram.sh
+
   release:
     name: Draft release
     needs: build
