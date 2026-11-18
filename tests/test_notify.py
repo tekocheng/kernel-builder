@@ -9,9 +9,9 @@ ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "notify_telegram.sh"
 
 STUB = """#!/usr/bin/env bash
-printf '%s\\n' "$@" > "$STUB_DIR/args.txt"
+printf '%s\n' "$@" > "$STUB_DIR/args.txt"
 cat > "$STUB_DIR/stdin.txt"
-exit "${STUB_EXIT:-0}"
+exit "\${STUB_EXIT:-0}"
 """
 
 
@@ -47,21 +47,21 @@ class NotifyTelegramTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             tmp = Path(d)
             (tmp / "release").mkdir()
-            (tmp / "release" / "kernel-release.txt").write_text("5.10.272-vertex-gabc-ab1\\n")
+            (tmp / "release" / "kernel-release.txt").write_text("5.10.272-vertex-gabc-ab1\n")
             (tmp / "release" / "marble-aospa-r62.zip").write_text("x")
             result = self.run_script(
                 tmp, JOB_STATUS="failure", TELEGRAM_BOT_TOKEN="123:SECRET", TELEGRAM_CHAT_ID="42"
             )
             self.assertEqual(result.returncode, 0)
             args = (tmp / "args.txt").read_text()
-            self.assertIn("\\u274c Build failed: marble / aospa / kernelsu (r62)", args)
+            self.assertIn("\u274c Build failed: marble / aospa / kernelsu (r62)", args)
             self.assertIn("uname: 5.10.272-vertex-gabc-ab1", args)
             self.assertIn("zip: marble-aospa-r62.zip", args)
             self.assertNotIn("SECRET", args)
             self.assertIn("bot123:SECRET/sendMessage", (tmp / "stdin.txt").read_text())
 
     def test_success_and_cancelled_icons(self) -> None:
-        for status, expected in (("success", "\\u2705 Build succeeded"), ("cancelled", "\\u26a0\\ufe0f Build cancelled")):
+        for status, expected in (("success", "\u2705 Build succeeded"), ("cancelled", "\u26a0\ufe0f Build cancelled")):
             with tempfile.TemporaryDirectory() as d:
                 tmp = Path(d)
                 self.run_script(tmp, JOB_STATUS=status, TELEGRAM_BOT_TOKEN="t", TELEGRAM_CHAT_ID="1")
