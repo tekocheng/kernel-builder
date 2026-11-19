@@ -25,7 +25,7 @@
     "repo": "aosp-pablo/android_kernel_xiaomi_sm8450",
     "ref": "17",
     "defconfig_mode": "gki_fragments",
-    "toolchain": "llvm-23.1.5",
+    "toolchain": "llvm-23.1.6",
     "modules_src": "../sm8450-modules/qcom/opensource",
     "modules_list": "config/techpack-sm8450.txt",
     "extra": [
@@ -48,7 +48,7 @@
     "repo": "LineageOS/android_kernel_xiaomi_sm8450",
     "ref": "lineage-24.0",
     "defconfig_mode": "gki_fragments",
-    "toolchain": "llvm-23.1.5",
+    "toolchain": "llvm-23.1.6",
     "modules_src": "../sm8450-modules/qcom/opensource",
     "modules_list": "config/techpack-sm8450.txt",
     "extra": [
@@ -79,7 +79,7 @@
     ],
     "builtin_nomount": true,
     "uname_suffix": false,
-    "toolchain": "llvm-23.1.5",
+    "toolchain": "llvm-23.1.6",
     "modules_src": "../sm8450-modules/qcom/opensource",
     "modules_list": "config/techpack-sm8450.txt",
     "extra": [
@@ -103,7 +103,7 @@
     "repo": "dhanush281/android_kernel_xiaomi_sm8450",
     "ref": "lineage-23.2",
     "defconfig_mode": "gki_fragments",
-    "toolchain": "llvm-23.1.5",
+    "toolchain": "llvm-23.1.6",
     "modules_src": "../sm8450-modules/qcom/opensource",
     "modules_list": "config/techpack-sm8450.txt",
     "extra": [
@@ -128,7 +128,7 @@
     "ref": "melt-rebase",
     "defconfig_mode": "single",
     "defconfig": "marble_defconfig",
-    "toolchain": "llvm-23.1.5",
+    "toolchain": "llvm-23.1.6",
     "notes": "Single-tree HyperOS kernel. Flash the Image on stock HyperOS only."
   },
   "bouquet": {
@@ -139,7 +139,7 @@
     "ref": "bouquet_ci",
     "defconfig_mode": "single",
     "defconfig": "marble_defconfig",
-    "toolchain": "llvm-23.1.5",
+    "toolchain": "llvm-23.1.6",
     "uname_suffix": false
   }
 }
