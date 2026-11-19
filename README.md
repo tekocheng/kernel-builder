@@ -39,7 +39,7 @@ The values below match the inputs declared in `.github/workflows/build.yml`.
 |---|---|---|
 | `device` | `marble` (default) | Device config file: `config/devices/marble.env`. Add a workflow dropdown option when adding another device. |
 | `kernel_name` | Text / empty | Overrides `CONFIG_LOCALVERSION`. Empty keeps the source's own `CONFIG_LOCALVERSION`. The uname always ends with `-g<hash12>-ab<run id>` and never `-dirty`. A leading `-` is added automatically when needed. |
-| `kernel_source` | `aospa` (default), `aosp`, `lineage`, `shinkai`, `lunaris`, `melt`, `bouquet`, `custom` | Selects a key in `config/sources.json`, or a one-off custom source. |
+| `kernel_source` | `aospa` (default), `infinityx`, `lineage`, `shinkai`, `lunaris`, `melt`, `bouquet`, `custom` | Selects a key in `config/sources.json`, or a one-off custom source. |
 | `all_sources` | `false` (default) | Builds every entry in `config/sources.json`. It cannot be combined with `kernel_source=custom`; when enabled, the selected source is replaced by the configured source list. |
 | `source_ref` | Text / empty | Overrides a source revision. For a Git source it overrides the kernel repository ref. For a predefined manifest source it overrides only the kernel project revision, not the manifest revision or every project in the manifest. Custom-source behavior is described below. |
 | `custom_repo` | Text / empty | Required for `kernel_source=custom`. Use `owner/repository` or a supported Git URL. For `custom_fetch=manifest`, this is the manifest repository. |
@@ -82,7 +82,7 @@ The predefined sources are declared in [`config/sources.json`](config/sources.js
 | Key | Repository / revision | Fetch method | Intended ROM / base | Toolchain (`auto`) |
 |---|---|---|---|---|
 | `aospa` | [aospa-shadedark/kernel_manifest](https://github.com/aospa-shadedark/kernel_manifest), `calcite-xiaomi-sm8450` | `manifest` | Paranoid Android (Calcite) | `android-r596125` |
-| `aosp` | [aosp-pablo/android_kernel_xiaomi_sm8450](https://github.com/aosp-pablo/android_kernel_xiaomi_sm8450), `17` | `git` | AOSP / LOS-based | `llvm-23.1.6` |
+| `infinityx` | [aosp-pablo/android_kernel_xiaomi_sm8450](https://github.com/aosp-pablo/android_kernel_xiaomi_sm8450), `17` | `git` | AOSP / LOS-based | `llvm-23.1.6` |
 | `lineage` | [LineageOS/android_kernel_xiaomi_sm8450](https://github.com/LineageOS/android_kernel_xiaomi_sm8450), `lineage-24.0` | `git` | LineageOS official | `llvm-23.1.6` |
 | `shinkai` | [nekoshirro/platform_kernel_xiaomi_marble](https://github.com/nekoshirro/platform_kernel_xiaomi_marble), `17` (modules and devicetrees from branch `16`) | `git` | AOSP / Shinkai Project | `llvm-23.1.6` |
 | `lunaris` | [dhanush281/android_kernel_xiaomi_sm8450](https://github.com/dhanush281/android_kernel_xiaomi_sm8450), `lineage-23.2` (modules and devicetrees from branch `16.2`) | `git` | Lunaris AOSP | `llvm-23.1.6` |
@@ -166,7 +166,7 @@ NoMount is controlled by the Boolean `enable_nomount` input. When enabled, the b
 | `image-only` | Kernel image only. This is the default and is the image packaged into AnyKernel3. |
 | `full` | Kernel image, in-tree `modules` and `dtbs` targets, plus external techpack modules when the selected source defines `modules_src` and `modules_list`. |
 
-The SM8450 techpack module list is [`config/techpack-sm8450.txt`](config/techpack-sm8450.txt). It is used only by sources that reference it in `config/sources.json` (currently `aospa`, `aosp`, `lineage`, `shinkai` and `lunaris`). Missing individual module directories in that list are skipped with a warning. `melt` and `bouquet` do not currently define that external techpack list.
+The SM8450 techpack module list is [`config/techpack-sm8450.txt`](config/techpack-sm8450.txt). It is used only by sources that reference it in `config/sources.json` (currently `aospa`, `infinityx`, `lineage`, `shinkai` and `lunaris`). Missing individual module directories in that list are skipped with a warning. `melt` and `bouquet` do not currently define that external techpack list.
 
 When files are produced, `full` adds `modules.tar.gz` and/or `dtbs.tar.gz` to the build outputs. These archives are not inserted into the AnyKernel3 ZIP. Missing techpack directories remain optional and are skipped with a warning; the exact missing entries are written to `skipped-techpack.txt` so partial techpack coverage is visible in the artifact.
 
