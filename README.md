@@ -53,7 +53,7 @@ The values below match the inputs declared in `.github/workflows/build.yml`.
 | `susfs_branch` | Text / empty | SUSFS branch to fetch. Empty uses the device default; for `marble`, `gki-android12-5.10`. |
 | `enable_nomount` | `false` (default), `true` | Integrates NoMount into the kernel. This is a built-in kernel option, not a separate module build. |
 | `nomount_ref` | Text / empty | NoMount branch or tag. Empty uses the device default; for `marble`, `dev`. |
-| `toolchain` | `auto` (default), `android-r596125`, `llvm-23.1.5`, `llvm-slim-23.1.5`, `alchemist-llvm-23` | Selects a toolchain from `config/toolchains.json`. `auto` prefers the source's configured toolchain, then the global default. |
+| `toolchain` | `auto` (default), `android-r596125`, `llvm-23.1.6`, `llvm-slim-23.1.5`, `alchemist-llvm-23` | Selects a toolchain from `config/toolchains.json`. `auto` prefers the source's configured toolchain, then the global default. |
 | `toolchain_url` | HTTPS URL / empty | Optional direct link to a `.tar.gz` or `.tar.xz` compiler archive. When supplied, it overrides `toolchain` for that run. The archive must contain `bin/clang` at its root or within the supported directory depth. The URL must be HTTPS; embedded username/password credentials are rejected. The workflow log and build metadata do not expose URL credentials, query strings, or fragments. The uploaded `plan.env` is sanitized by an exit trap, including when a later build step fails. |
 | `toolchain_sha256` | 64-character SHA-256 / empty | Optional expected checksum for the selected archive. A mismatch stops the build before extraction. When omitted, the builder still records the downloaded archive's actual checksum but cannot verify it against a trusted expected value. |
 | `lto` | `thin` (default), `none`, `full` | Selects the kernel LTO configuration. See [LTO](#lto). |
@@ -82,12 +82,12 @@ The predefined sources are declared in [`config/sources.json`](config/sources.js
 | Key | Repository / revision | Fetch method | Intended ROM / base | Toolchain (`auto`) |
 |---|---|---|---|---|
 | `aospa` | [aospa-shadedark/kernel_manifest](https://github.com/aospa-shadedark/kernel_manifest), `calcite-xiaomi-sm8450` | `manifest` | Paranoid Android (Calcite) | `android-r596125` |
-| `aosp` | [aosp-pablo/android_kernel_xiaomi_sm8450](https://github.com/aosp-pablo/android_kernel_xiaomi_sm8450), `17` | `git` | AOSP / LOS-based | `llvm-23.1.5` |
-| `lineage` | [LineageOS/android_kernel_xiaomi_sm8450](https://github.com/LineageOS/android_kernel_xiaomi_sm8450), `lineage-24.0` | `git` | LineageOS official | `llvm-23.1.5` |
-| `shinkai` | [nekoshirro/platform_kernel_xiaomi_marble](https://github.com/nekoshirro/platform_kernel_xiaomi_marble), `17` (modules and devicetrees from branch `16`) | `git` | AOSP / Shinkai Project | `llvm-23.1.5` |
-| `lunaris` | [dhanush281/android_kernel_xiaomi_sm8450](https://github.com/dhanush281/android_kernel_xiaomi_sm8450), `lineage-23.2` (modules and devicetrees from branch `16.2`) | `git` | Lunaris AOSP | `llvm-23.1.5` |
-| `melt` | [Pzqqt/android_kernel_xiaomi_marble](https://github.com/Pzqqt/android_kernel_xiaomi_marble), `melt-rebase` | `git` | HyperOS | `llvm-23.1.5` |
-| `bouquet` | [Pzqqt/android_kernel_xiaomi_marble](https://github.com/Pzqqt/android_kernel_xiaomi_marble), `bouquet_ci` | `git` | AOSP / LOS-based | `llvm-23.1.5` |
+| `aosp` | [aosp-pablo/android_kernel_xiaomi_sm8450](https://github.com/aosp-pablo/android_kernel_xiaomi_sm8450), `17` | `git` | AOSP / LOS-based | `llvm-23.1.6` |
+| `lineage` | [LineageOS/android_kernel_xiaomi_sm8450](https://github.com/LineageOS/android_kernel_xiaomi_sm8450), `lineage-24.0` | `git` | LineageOS official | `llvm-23.1.6` |
+| `shinkai` | [nekoshirro/platform_kernel_xiaomi_marble](https://github.com/nekoshirro/platform_kernel_xiaomi_marble), `17` (modules and devicetrees from branch `16`) | `git` | AOSP / Shinkai Project | `llvm-23.1.6` |
+| `lunaris` | [dhanush281/android_kernel_xiaomi_sm8450](https://github.com/dhanush281/android_kernel_xiaomi_sm8450), `lineage-23.2` (modules and devicetrees from branch `16.2`) | `git` | Lunaris AOSP | `llvm-23.1.6` |
+| `melt` | [Pzqqt/android_kernel_xiaomi_marble](https://github.com/Pzqqt/android_kernel_xiaomi_marble), `melt-rebase` | `git` | HyperOS | `llvm-23.1.6` |
+| `bouquet` | [Pzqqt/android_kernel_xiaomi_marble](https://github.com/Pzqqt/android_kernel_xiaomi_marble), `bouquet_ci` | `git` | AOSP / LOS-based | `llvm-23.1.6` |
 
 **ROM compatibility matters.** The `melt` preset is labelled for HyperOS in its source configuration. Do not assume a kernel built for one ROM/base is interchangeable with another.
 
@@ -106,8 +106,8 @@ Toolchain definitions live in [`config/toolchains.json`](config/toolchains.json)
 | Key | Compiler source | Configuration |
 |---|---|---|
 | `android-r596125` | [Neebe3289/aosp-clang](https://github.com/Neebe3289/aosp-clang), release `clang-22.0.2-15682573` | AOSP Clang 22.0.2 based on Android r596125. |
-| `llvm-23.1.5` | [LLVM Project](https://github.com/llvm/llvm-project/releases/tag/llvmorg-23.1.5) | Upstream LLVM 23.1.5; `max_jobs=2` caps parallel make jobs for this toolchain. It is marked as the global default. |
-| `llvm-slim-23.1.5` | [kernel.org slim LLVM](https://mirrors.edge.kernel.org/pub/tools/llvm/) | Slim LLVM 23.1.5 (`llvm-23.1.5-x86_64.tar.xz`); `max_jobs=2`. Not a default. |
+| `llvm-23.1.6` | [LLVM Project](https://github.com/llvm/llvm-project/releases/tag/llvmorg-23.1.6) | Upstream LLVM 23.1.6; `max_jobs=2` caps parallel make jobs for this toolchain. It is marked as the global default. |
+| `llvm-slim-23.1.5` | [kernel.org slim LLVM](https://mirrors.edge.kernel.org/pub/tools/llvm/) | Slim LLVM 23.1.6 (`llvm-23.1.6-x86_64.tar.xz`); `max_jobs=2`. Not a default. |
 | `alchemist-llvm-23` | [nekoshirro/Alchemist-LLVM](https://github.com/nekoshirro/Alchemist-LLVM) | Alchemist LLVM 23 (clang 23.0.1), release `lto-20261105`, pinned by SHA-256; `max_jobs=2`. Not a default. |
 
 The builder downloads and safely extracts the selected archive, locates `bin/clang`, and adds that toolchain's `bin` directory to `PATH`. Archive paths and links are checked before extraction. The workflow caches the `toolchains/` directory using a cache identity that includes the toolchain URL and expected checksum. A `toolchain_url` override takes precedence over the named toolchain and is stored in a URL-derived toolchain directory. Supply `toolchain_sha256` when a trusted checksum is available; a cached archive is reused only when its recorded checksum matches the expected value.
@@ -216,7 +216,7 @@ Add a source object to [`config/sources.json`](config/sources.json). To select i
   "repo": "LineageOS/android_kernel_xiaomi_sm8450",
   "ref": "lineage-23.2",
   "defconfig_mode": "gki_fragments",
-  "toolchain": "llvm-23.1.5",
+  "toolchain": "llvm-23.1.6",
   "modules_src": "../sm8450-modules/qcom/opensource",
   "modules_list": "config/techpack-sm8450.txt",
   "extra": [
