@@ -95,7 +95,7 @@ on:
         options:
           - auto
           - android-r596125
-          - llvm-23.1.5
+          - llvm-23.1.6
           - llvm-slim-23.1.5
           - alchemist-llvm-23
       toolchain_url:
