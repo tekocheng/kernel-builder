@@ -3,14 +3,14 @@
     "url": "https://github.com/Neebe3289/aosp-clang/releases/download/clang-22.0.2-15682573/clang-22.0.2-15682573.tar.gz",
     "notes": "AOSP Clang 22.0.2, based on Android r596125 (Neebe3289/aosp-clang release)."
   },
-  "llvm-23.1.5": {
-    "url": "https://github.com/llvm/llvm-project/releases/download/llvmorg-23.1.5/LLVM-23.1.5-Linux-X64.tar.xz",
+  "llvm-23.1.6": {
+    "url": "https://github.com/llvm/llvm-project/releases/download/llvmorg-23.1.6/LLVM-23.1.6-Linux-X64.tar.xz",
     "max_jobs": 2,
     "default": true,
-    "notes": "Upstream LLVM release. Make jobs are capped to stay inside runner memory."
+    "notes": "Upstream LLVM 23.1.6 release. Make jobs are capped to stay inside runner memory."
   },
   "llvm-slim-23.1.5": {
-    "url": "https://mirrors.edge.kernel.org/pub/tools/llvm/files/llvm-23.1.5-x86_64.tar.xz",
+    "url": "https://mirrors.edge.kernel.org/pub/tools/llvm/files/llvm-23.1.6-x86_64.tar.xz",
     "max_jobs": 2,
     "notes": "Slim LLVM 23.1.5 from kernel.org (smaller download, built for kernel use). Make jobs are capped like the upstream LLVM entry."
   },
