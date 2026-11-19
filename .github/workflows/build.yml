@@ -19,8 +19,8 @@ on:
         default: aospa
         options:
           - aospa
-          - aosp
           - lineage
+          - infinityx
           - shinkai
           - lunaris
           - melt
