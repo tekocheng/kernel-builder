@@ -107,7 +107,7 @@ Toolchain definitions live in [`config/toolchains.json`](config/toolchains.json)
 |---|---|---|
 | `android-r596125` | [Neebe3289/aosp-clang](https://github.com/Neebe3289/aosp-clang), release `clang-22.0.2-15682573` | AOSP Clang 22.0.2 based on Android r596125. |
 | `llvm-23.1.6` | [LLVM Project](https://github.com/llvm/llvm-project/releases/tag/llvmorg-23.1.6) | Upstream LLVM 23.1.6; `max_jobs=2` caps parallel make jobs for this toolchain. It is marked as the global default. |
-| `llvm-slim-23.1.5` | [kernel.org slim LLVM](https://mirrors.edge.kernel.org/pub/tools/llvm/) | Slim LLVM 23.1.6 (`llvm-23.1.6-x86_64.tar.xz`); `max_jobs=2`. Not a default. |
+| `llvm-slim-23.1.5` | [kernel.org slim LLVM](https://mirrors.edge.kernel.org/pub/tools/llvm/) | Slim LLVM 23.1.5 (`llvm-23.1.5-x86_64.tar.xz`); `max_jobs=2`. Not a default. The kernel.org mirror has not published a 23.1.6 archive yet, so this preset remains pinned to the verified 23.1.5 package. |
 | `alchemist-llvm-23` | [nekoshirro/Alchemist-LLVM](https://github.com/nekoshirro/Alchemist-LLVM) | Alchemist LLVM 23 (clang 23.0.1), release `lto-20261105`, pinned by SHA-256; `max_jobs=2`. Not a default. |
 
 The builder downloads and safely extracts the selected archive, locates `bin/clang`, and adds that toolchain's `bin` directory to `PATH`. Archive paths and links are checked before extraction. The workflow caches the `toolchains/` directory using a cache identity that includes the toolchain URL and expected checksum. A `toolchain_url` override takes precedence over the named toolchain and is stored in a URL-derived toolchain directory. Supply `toolchain_sha256` when a trusted checksum is available; a cached archive is reused only when its recorded checksum matches the expected value.
