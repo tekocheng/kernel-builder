@@ -55,7 +55,7 @@ class PlanResolutionTests(unittest.TestCase):
 
     def test_uname_suffix_defaults_on_and_bouquet_opts_out(self) -> None:
         self.assertTrue(plan.uname_suffix_enabled({}))
-        self.assertTrue(plan.uname_suffix_enabled(plan.SOURCES["aosp"]))
+        self.assertTrue(plan.uname_suffix_enabled(plan.SOURCES["infinityx"]))
         self.assertFalse(plan.uname_suffix_enabled(plan.SOURCES["bouquet"]))
         self.assertFalse(plan.uname_suffix_enabled(plan.SOURCES["shinkai"]))
 
@@ -68,7 +68,7 @@ class PlanResolutionTests(unittest.TestCase):
 
     def test_builtin_nomount_is_opt_in_per_source(self) -> None:
         self.assertFalse(plan.builtin_nomount({}))
-        self.assertFalse(plan.builtin_nomount(plan.SOURCES["aosp"]))
+        self.assertFalse(plan.builtin_nomount(plan.SOURCES["infinityx"]))
         self.assertTrue(plan.builtin_nomount(plan.SOURCES["shinkai"]))
 
     def test_manager_susfs_specific_ref(self) -> None:
