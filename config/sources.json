@@ -18,29 +18,6 @@
     "modules_list": "config/techpack-sm8450.txt",
     "notes": "Reads the manifest and clones its GitHub projects. AOSP clang and host gcc prebuilts are skipped; the selected toolchain is used instead."
   },
-  "aosp": {
-    "display": "AOSP",
-    "rom": "aosp-pablo / LOS-based",
-    "fetch": "git",
-    "repo": "aosp-pablo/android_kernel_xiaomi_sm8450",
-    "ref": "17",
-    "defconfig_mode": "gki_fragments",
-    "toolchain": "llvm-23.1.6",
-    "modules_src": "../sm8450-modules/qcom/opensource",
-    "modules_list": "config/techpack-sm8450.txt",
-    "extra": [
-      {
-        "repo": "aosp-pablo/android_kernel_xiaomi_sm8450-modules",
-        "ref": "17",
-        "dest": "../sm8450-modules"
-      },
-      {
-        "repo": "aosp-pablo/android_kernel_xiaomi_sm8450-devicetrees",
-        "ref": "17",
-        "dest": "../sm8450-devicetrees"
-      }
-    ]
-  },
   "lineage": {
     "display": "LineageOS",
     "rom": "LineageOS official",
@@ -60,6 +37,29 @@
       {
         "repo": "LineageOS/android_kernel_xiaomi_sm8450-devicetrees",
         "ref": "lineage-24.0",
+        "dest": "../sm8450-devicetrees"
+      }
+    ]
+  },
+  "infinityx": {
+    "display": "InfinityX",
+    "rom": "InfinityX (AOSP Pablo kernel base)",
+    "fetch": "git",
+    "repo": "aosp-pablo/android_kernel_xiaomi_sm8450",
+    "ref": "17",
+    "defconfig_mode": "gki_fragments",
+    "toolchain": "llvm-23.1.6",
+    "modules_src": "../sm8450-modules/qcom/opensource",
+    "modules_list": "config/techpack-sm8450.txt",
+    "extra": [
+      {
+        "repo": "aosp-pablo/android_kernel_xiaomi_sm8450-modules",
+        "ref": "17",
+        "dest": "../sm8450-modules"
+      },
+      {
+        "repo": "aosp-pablo/android_kernel_xiaomi_sm8450-devicetrees",
+        "ref": "17",
         "dest": "../sm8450-devicetrees"
       }
     ]
