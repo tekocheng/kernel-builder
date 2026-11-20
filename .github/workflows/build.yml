@@ -125,6 +125,14 @@ on:
         description: "Reuse compiler cache between runs"
         type: boolean
         default: true
+      uname_hash:
+        description: "Add -g<kernel commit> to the kernel uname"
+        type: boolean
+        default: true
+      uname_run_id:
+        description: "Add -ab<run id> to the kernel uname"
+        type: boolean
+        default: true
       draft_release:
         description: "Create a draft GitHub release with the zip files"
         type: boolean
@@ -240,6 +248,8 @@ jobs:
           LTO: ${{ inputs.lto }}
           BUILD_SCOPE: ${{ inputs.build_scope }}
           USE_CCACHE: ${{ inputs.ccache }}
+          USE_UNAME_HASH: ${{ inputs.uname_hash }}
+          USE_UNAME_RUN_ID: ${{ inputs.uname_run_id }}
         run: bash scripts/build.sh
 
       - name: Upload build outputs

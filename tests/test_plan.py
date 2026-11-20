@@ -53,11 +53,15 @@ class PlanResolutionTests(unittest.TestCase):
         self.assertEqual(entry["manifest_ref"], "manifest-branch")
         self.assertEqual(entry["kernel_path"], "kernel_platform/xiaomi/sm8450")
 
-    def test_uname_suffix_defaults_on_and_bouquet_opts_out(self) -> None:
-        self.assertTrue(plan.uname_suffix_enabled({}))
-        self.assertTrue(plan.uname_suffix_enabled(plan.SOURCES["infinityx"]))
-        self.assertFalse(plan.uname_suffix_enabled(plan.SOURCES["bouquet"]))
-        self.assertFalse(plan.uname_suffix_enabled(plan.SOURCES["shinkai"]))
+    def test_uname_switches_are_independent_for_every_source(self) -> None:
+        for key, entry in plan.SOURCES.items():
+            self.assertEqual(plan.resolve_uname_parts("true", "true", entry), (True, True), key)
+            self.assertEqual(plan.resolve_uname_parts("true", "false", entry), (True, False), key)
+            self.assertEqual(plan.resolve_uname_parts("false", "true", entry), (False, True), key)
+            self.assertEqual(plan.resolve_uname_parts("false", "false", entry), (False, False), key)
+
+    def test_a_source_can_still_opt_out_of_both_uname_parts(self) -> None:
+        self.assertEqual(plan.resolve_uname_parts("true", "true", {"uname_suffix": False}), (False, False))
 
     def test_shinkai_uses_its_own_fragments(self) -> None:
         device = plan.load_device("marble")

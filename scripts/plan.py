@@ -111,6 +111,13 @@ def uname_suffix_enabled(entry: dict) -> bool:
     return entry.get("uname_suffix", True) is not False
 
 
+def resolve_uname_parts(hash_on: str, run_id_on: str, entry: dict) -> tuple[bool, bool]:
+    """The two workflow switches decide; a source can still opt out of both with "uname_suffix": false."""
+    if not uname_suffix_enabled(entry):
+        return False, False
+    return truthy(hash_on), truthy(run_id_on)
+
+
 def builtin_nomount(entry: dict) -> bool:
     """A source can set "builtin_nomount": true when NoMount is already part of its kernel tree."""
     return entry.get("builtin_nomount", False) is True
@@ -265,7 +272,8 @@ def write_plan(args: argparse.Namespace) -> None:
         "MANIFEST_SKIP": " ".join(entry.get("manifest_skip", [])),
         "SOURCE_REF_OVERRIDE": require_single_line(args.source_ref.strip(), "source_ref"),
         "DEFCONFIG_MODE": mode,
-        "UNAME_SUFFIX": "true" if uname_suffix_enabled(entry) else "false",
+        "UNAME_HASH": "true" if resolve_uname_parts(getattr(args, "uname_hash", "true"), getattr(args, "uname_run_id", "true"), entry)[0] else "false",
+        "UNAME_RUN_ID": "true" if resolve_uname_parts(getattr(args, "uname_hash", "true"), getattr(args, "uname_run_id", "true"), entry)[1] else "false",
         "BUILTIN_NOMOUNT": "true" if builtin_nomount(entry) else "false",
         "TOOLCHAIN": toolchain,
         "TOOLCHAIN_URL": toolchain_entry["url"],
@@ -563,6 +571,8 @@ def build_parser() -> argparse.ArgumentParser:
     plan.add_argument("--lto", default="thin")
     plan.add_argument("--build-scope", default="image-only")
     plan.add_argument("--ccache", default="true")
+    plan.add_argument("--uname-hash", default="true")
+    plan.add_argument("--uname-run-id", default="true")
     plan.add_argument("--out", required=True)
     plan.set_defaults(func=write_plan)
 

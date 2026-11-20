@@ -78,7 +78,6 @@
       "vendor/extra.config"
     ],
     "builtin_nomount": true,
-    "uname_suffix": false,
     "toolchain": "llvm-23.1.6",
     "modules_src": "../sm8450-modules/qcom/opensource",
     "modules_list": "config/techpack-sm8450.txt",
@@ -139,7 +138,6 @@
     "ref": "bouquet_ci",
     "defconfig_mode": "single",
     "defconfig": "marble_defconfig",
-    "toolchain": "llvm-23.1.6",
-    "uname_suffix": false
+    "toolchain": "llvm-23.1.6"
   }
 }

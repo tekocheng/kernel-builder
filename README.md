@@ -38,7 +38,7 @@ The values below match the inputs declared in `.github/workflows/build.yml`.
 | Input | Available values / default | Description |
 |---|---|---|
 | `device` | `marble` (default) | Device config file: `config/devices/marble.env`. Add a workflow dropdown option when adding another device. |
-| `kernel_name` | Text / empty | Overrides `CONFIG_LOCALVERSION`. Empty keeps the source's own `CONFIG_LOCALVERSION`. The uname always ends with `-g<hash12>-ab<run id>` and never `-dirty`. A leading `-` is added automatically when needed. |
+| `kernel_name` | Text / empty | Overrides `CONFIG_LOCALVERSION`. Empty keeps the source's own `CONFIG_LOCALVERSION`. The `uname_hash` and `uname_run_id` inputs independently control the `-g<hash12>` and `-ab<run id>` suffixes; disabled suffixes are omitted and `-dirty` is suppressed. A leading `-` is added automatically when needed. |
 | `kernel_source` | `aospa` (default), `infinityx`, `lineage`, `shinkai`, `lunaris`, `melt`, `bouquet`, `custom` | Selects a key in `config/sources.json`, or a one-off custom source. |
 | `all_sources` | `false` (default) | Builds every entry in `config/sources.json`. It cannot be combined with `kernel_source=custom`; when enabled, the selected source is replaced by the configured source list. |
 | `source_ref` | Text / empty | Overrides a source revision. For a Git source it overrides the kernel repository ref. For a predefined manifest source it overrides only the kernel project revision, not the manifest revision or every project in the manifest. Custom-source behavior is described below. |
@@ -59,6 +59,8 @@ The values below match the inputs declared in `.github/workflows/build.yml`.
 | `lto` | `thin` (default), `none`, `full` | Selects the kernel LTO configuration. See [LTO](#lto). |
 | `build_scope` | `image-only` (default), `full` | `image-only` builds the flashable kernel image. `full` also builds in-tree modules and DTBs, and builds the configured external SM8450 techpack modules where the source provides a techpack list. |
 | `ccache` | `true` (default), `false` | Enables compiler caching. The workflow also caches toolchain files, ccache data, and the ThinLTO cache between runs. |
+| `uname_hash` | `true` (default), `false` | Adds `-g<kernel commit>` to the kernel uname. |
+| `uname_run_id` | `true` (default), `false` | Adds `-ab<run id>` to the kernel uname. With both switches off the uname is the plain release string (kernel version plus `CONFIG_LOCALVERSION`). |
 | `draft_release` | `false` (default), `true` | On a fully successful build matrix, creates a draft GitHub release containing the ZIP files and their SHA-256 checksums. |
 
 ### Build matrix behavior
@@ -229,7 +231,7 @@ Add a source object to [`config/sources.json`](config/sources.json). To select i
 }
 ```
 
-`uname_suffix` (optional, default `true`) controls the `-g<hash12>-ab<run id>` uname suffix. Set it to `false` to get the plain release string (kernel version plus the source's `CONFIG_LOCALVERSION`, for example `5.10.272-[Re]Shinomiya`) with no `+`, hash, run id or `-dirty`. Currently `false` for `shinkai` and `bouquet` (whose modules are tied to the exact release string).
+`uname_suffix` (optional, default `true`) lets one source opt out of both uname suffixes whatever the workflow switches say. No source uses it at the moment.
 
 `builtin_nomount` (optional, default `false`) marks a source whose kernel tree already contains NoMount (currently `shinkai`). For such a source the builder skips the external NoMount setup and no longer forces `CONFIG_NOMOUNT` off, so the source's own setting is kept.
 
