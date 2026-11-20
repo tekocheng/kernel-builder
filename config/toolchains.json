@@ -9,10 +9,10 @@
     "default": true,
     "notes": "Upstream LLVM 23.1.6 release. Make jobs are capped to stay inside runner memory."
   },
-  "llvm-slim-23.1.5": {
-    "url": "https://mirrors.edge.kernel.org/pub/tools/llvm/files/llvm-23.1.5-x86_64.tar.xz",
+  "llvm-slim-23.1.6": {
+    "url": "https://mirrors.edge.kernel.org/pub/tools/llvm/files/llvm-23.1.6-x86_64.tar.xz",
     "max_jobs": 2,
-    "notes": "Slim LLVM 23.1.5 from kernel.org (smaller download, built for kernel use). Make jobs are capped like the upstream LLVM entry."
+    "notes": "Slim LLVM 23.1.6 from kernel.org (smaller download, built for kernel use). Make jobs are capped like the upstream LLVM entry."
   },
   "alchemist-llvm-23": {
     "url": "https://github.com/nekoshirro/Alchemist-LLVM/releases/download/lto-20261105/Alchemist-LLVM-23-20261105.tar.xz",

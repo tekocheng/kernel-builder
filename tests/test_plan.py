@@ -93,7 +93,7 @@ class PlanResolutionTests(unittest.TestCase):
             "auto",
             "https://example.invalid/clang.tar.xz",
             "a" * 64,
-            {"toolchain": "llvm-23.1.5"},
+            {"toolchain": "llvm-slim-23.1.6"},
         )
         self.assertTrue(name.startswith("custom-"))
         self.assertEqual(entry["sha256"], "a" * 64)

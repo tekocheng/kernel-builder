@@ -138,6 +138,6 @@
     "ref": "bouquet_ci",
     "defconfig_mode": "single",
     "defconfig": "marble_defconfig",
-    "toolchain": "llvm-23.1.6"
+    "toolchain": "llvm-slim-23.1.6"
   }
 }
