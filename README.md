@@ -128,8 +128,8 @@ Manager definitions are stored in [`config/managers.json`](config/managers.json)
 |---|---|---|
 | `kernelsu` | Official KernelSU | [tiann/KernelSU](https://github.com/tiann/KernelSU), `main` |
 | `kernelsu-next` | KernelSU-Next | [KernelSU-Next/KernelSU-Next](https://github.com/KernelSU-Next/KernelSU-Next), `dev` |
-| `sukisu-nova` | SukiSU Nova | [SukiSU-Ultra/SukiSU-Ultra](https://github.com/SukiSU-Ultra/SukiSU-Ultra), `main` |
-| `bakasu` | BakaSU | [ReSukiSU/ReSukiSU](https://github.com/ReSukiSU/ReSukiSU), `main` |
+| `sukisu-nova` | SukiSU Nova | [SukiSU-Nova/SukiSU-Nova](https://github.com/SukiSU-Nova/SukiSU-Nova), `main` |
+| `bakasu` | BakaSU | [Baka-SU/BakaSU](https://github.com/Baka-SU/BakaSU), `main` |
 
 The builder fetches the configured manager's `setup` script and runs it in the kernel tree. Before setup, it removes stale KernelSU/KernelSU-Next directories or known in-tree locations so that a previously embedded manager does not silently replace the selected manager. It then checks that the expected manager Kconfig was created and that `CONFIG_KSU` remains enabled after `olddefconfig` (`y` or `m`).
 
@@ -369,7 +369,7 @@ This repository coordinates and automates the work of the projects below. Credit
 
 - [tiann/KernelSU](https://github.com/tiann/KernelSU): official KernelSU.
 - [KernelSU-Next](https://github.com/KernelSU-Next/KernelSU-Next) and [pershoot/KernelSU-Next](https://github.com/pershoot/KernelSU-Next): KernelSU-Next and the configured `dev-susfs` fallback.
-- [SukiSU Nova](https://github.com/SukiSU-Ultra/SukiSU-Ultra) and [BakaSU](https://github.com/ReSukiSU/ReSukiSU).
+- [SukiSU Nova](https://github.com/SukiSU-Nova/SukiSU-Nova) and [BakaSU](https://github.com/Baka-SU/BakaSU).
 - [simonpunk/susfs4ksu](https://gitlab.com/simonpunk/susfs4ksu): SUSFS kernel and manager patches.
 - [maxsteeel/nomount](https://github.com/maxsteeel/nomount): NoMount integration.
 

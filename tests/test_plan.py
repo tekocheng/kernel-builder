@@ -78,13 +78,13 @@ class PlanResolutionTests(unittest.TestCase):
     def test_renamed_managers_keep_their_upstream_config(self) -> None:
         nova = plan.resolve_manager("sukisu-nova", True, "")
         self.assertEqual(nova["MANAGER_DISPLAY"], "SukiSU Nova")
-        self.assertEqual(nova["MANAGER_REPO"], "SukiSU-Ultra/SukiSU-Ultra")
+        self.assertEqual(nova["MANAGER_REPO"], "SukiSU-Nova/SukiSU-Nova")
         self.assertEqual(nova["MANAGER_REF"], "builtin")
         self.assertEqual(nova["ENABLE_SUSFS"], "true")
 
         baka = plan.resolve_manager("bakasu", True, "")
         self.assertEqual(baka["MANAGER_DISPLAY"], "BakaSU")
-        self.assertEqual(baka["MANAGER_REPO"], "ReSukiSU/ReSukiSU")
+        self.assertEqual(baka["MANAGER_REPO"], "Baka-SU/BakaSU")
         self.assertEqual(baka["MANAGER_REF"], "main")
         self.assertEqual(baka["ENABLE_SUSFS"], "true")
 

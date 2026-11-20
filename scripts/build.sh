@@ -357,6 +357,10 @@ setup_manager_from() {
   rm -rf "${KERNEL_DIR}/KernelSU" "${KERNEL_DIR}/KernelSU-Next" \
     "${KERNEL_DIR}/drivers/kernelsu" "${KERNEL_DIR}/common/drivers/kernelsu"
   curl -fsSL "${url}" -o "${SRC}/manager-setup.sh"
+  if [[ "${MANAGER}" == "sukisu-nova" ]] && grep -qF 'https://git.zako.shirkneko.top:20004/shirkneko/SukiSU' "${SRC}/manager-setup.sh"; then
+    sed -i 's#https://git.zako.shirkneko.top:20004/shirkneko/SukiSU#https://github.com/SukiSU-Nova/SukiSU-Nova#g' "${SRC}/manager-setup.sh"
+    log "SukiSU Nova setup: replaced legacy clone URL with the official GitHub repository"
+  fi
   sha256sum "${SRC}/manager-setup.sh" | awk '{print $1}' > "${RELEASE}/manager-setup.sha256"
   (
     cd "${KERNEL_DIR}"
