@@ -24,8 +24,8 @@
     "susfs_fallback_ref": "dev-susfs",
     "notes": "Official dev first. If that tree still has no KSU_SUSFS and the official patch does not apply, fall back to pershoot dev-susfs."
   },
-  "sukisu-ultra": {
-    "display": "SukiSU Ultra",
+  "sukisu-nova": {
+    "display": "SukiSU Nova",
     "repo": "SukiSU-Ultra/SukiSU-Ultra",
     "ref": "main",
     "susfs_ref": "builtin",
@@ -33,8 +33,8 @@
     "susfs": true,
     "notes": "SUSFS builds check out the builtin branch, which already carries manager-side KSU_SUSFS."
   },
-  "resukisu": {
-    "display": "ReSukiSU",
+  "bakasu": {
+    "display": "BakaSU",
     "repo": "ReSukiSU/ReSukiSU",
     "ref": "main",
     "setup": "kernel/setup.sh",

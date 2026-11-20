@@ -46,7 +46,7 @@ The values below match the inputs declared in `.github/workflows/build.yml`.
 | `custom_ref` | Text / empty | Required for a custom source unless `source_ref` is supplied. For Git, this is the kernel repository ref; for a manifest, it is the manifest repository ref. |
 | `custom_fetch` | `git` (default), `manifest` | Selects how the custom source is fetched. |
 | `custom_kernel_path` | Text / empty | Optional path to the kernel tree inside the fetched repository/manifest. Defaults to `.` for Git and `kernel_platform/xiaomi/sm8450` for a custom manifest. |
-| `manager` | `kernelsu` (default), `none`, `kernelsu-next`, `sukisu-ultra`, `resukisu`, `all` | Selects the root manager. `all` builds every entry in `config/managers.json`, including `none`. |
+| `manager` | `kernelsu` (default), `none`, `kernelsu-next`, `sukisu-nova`, `bakasu`, `all` | Selects the root manager. `all` builds every entry in `config/managers.json`, including `none`. |
 | `manager_ref` | Text / empty | Overrides the selected manager's branch, tag, or commit. If empty, the manager's configured ref is used (or its SUSFS-specific ref when applicable). |
 | `enable_susfs` | `true` (default), `false` | Enables the SUSFS kernel and manager integration when the selected manager supports it. `manager=none` disables SUSFS. |
 | `susfs_ref` | Text / empty | Optional SUSFS commit or tag. Empty uses the tip of the selected SUSFS branch. |
@@ -128,8 +128,8 @@ Manager definitions are stored in [`config/managers.json`](config/managers.json)
 |---|---|---|
 | `kernelsu` | Official KernelSU | [tiann/KernelSU](https://github.com/tiann/KernelSU), `main` |
 | `kernelsu-next` | KernelSU-Next | [KernelSU-Next/KernelSU-Next](https://github.com/KernelSU-Next/KernelSU-Next), `dev` |
-| `sukisu-ultra` | SukiSU Ultra | [SukiSU-Ultra/SukiSU-Ultra](https://github.com/SukiSU-Ultra/SukiSU-Ultra), `main` |
-| `resukisu` | ReSukiSU | [ReSukiSU/ReSukiSU](https://github.com/ReSukiSU/ReSukiSU), `main` |
+| `sukisu-nova` | SukiSU Nova | [SukiSU-Ultra/SukiSU-Ultra](https://github.com/SukiSU-Ultra/SukiSU-Ultra), `main` |
+| `bakasu` | BakaSU | [ReSukiSU/ReSukiSU](https://github.com/ReSukiSU/ReSukiSU), `main` |
 
 The builder fetches the configured manager's `setup` script and runs it in the kernel tree. Before setup, it removes stale KernelSU/KernelSU-Next directories or known in-tree locations so that a previously embedded manager does not silently replace the selected manager. It then checks that the expected manager Kconfig was created and that `CONFIG_KSU` remains enabled after `olddefconfig` (`y` or `m`).
 
@@ -141,8 +141,8 @@ The current workflow has **no `ksu_mode` input and no KernelSU LKM packaging ste
 
 - **Official KernelSU:** when its Kconfig does not already define `KSU_SUSFS`, the builder applies `10_enable_susfs_for_ksu.patch` from the selected SUSFS checkout.
 - **KernelSU-Next:** it tries the configured official tree first. If the manager-side SUSFS patch cannot be applied, it can fall back to `pershoot/KernelSU-Next` at `dev-susfs`.
-- **SukiSU Ultra:** its manager entry sets `susfs_ref` to `builtin`; when SUSFS is enabled and no `manager_ref` override is supplied, that branch is selected.
-- **ReSukiSU:** its configured tree is expected to provide `KSU_SUSFS` already; the builder skips the manager-side patch when that Kconfig option exists.
+- **SukiSU Nova:** its manager entry sets `susfs_ref` to `builtin`; when SUSFS is enabled and no `manager_ref` override is supplied, that branch is selected.
+- **BakaSU:** its configured tree is expected to provide `KSU_SUSFS` already; the builder skips the manager-side patch when that Kconfig option exists.
 
 ## SUSFS
 
@@ -369,7 +369,7 @@ This repository coordinates and automates the work of the projects below. Credit
 
 - [tiann/KernelSU](https://github.com/tiann/KernelSU): official KernelSU.
 - [KernelSU-Next](https://github.com/KernelSU-Next/KernelSU-Next) and [pershoot/KernelSU-Next](https://github.com/pershoot/KernelSU-Next): KernelSU-Next and the configured `dev-susfs` fallback.
-- [SukiSU-Ultra](https://github.com/SukiSU-Ultra/SukiSU-Ultra) and [ReSukiSU](https://github.com/ReSukiSU/ReSukiSU).
+- [SukiSU Nova](https://github.com/SukiSU-Ultra/SukiSU-Ultra) and [BakaSU](https://github.com/ReSukiSU/ReSukiSU).
 - [simonpunk/susfs4ksu](https://gitlab.com/simonpunk/susfs4ksu): SUSFS kernel and manager patches.
 - [maxsteeel/nomount](https://github.com/maxsteeel/nomount): NoMount integration.
 

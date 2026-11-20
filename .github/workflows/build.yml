@@ -61,8 +61,8 @@ on:
           - none
           - kernelsu
           - kernelsu-next
-          - sukisu-ultra
-          - resukisu
+          - sukisu-nova
+          - bakasu
           - all
       manager_ref:
         description: "Override the manager branch, tag, or commit"
