@@ -178,6 +178,7 @@ jobs:
           TOOLCHAIN: ${{ inputs.toolchain }}
           TOOLCHAIN_URL: ${{ inputs.toolchain_url }}
           TOOLCHAIN_SHA256: ${{ inputs.toolchain_sha256 }}
+          BUILD_SCOPE: ${{ inputs.build_scope }}
         run: bash scripts/build.sh
 
   build:

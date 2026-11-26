@@ -62,6 +62,7 @@ if [[ -n "${GITHUB_OUTPUT:-}" && "${MATRIX_ONLY:-}" == "1" ]]; then
     --toolchain-url "${TOOLCHAIN_URL}" \
     --toolchain-sha256 "${TOOLCHAIN_SHA256}" \
     --all-sources "${ALL_SOURCES}" \
+    --build-scope "${BUILD_SCOPE}" \
     --github-output "${GITHUB_OUTPUT}"
   exit 0
 fi

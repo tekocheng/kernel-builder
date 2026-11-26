@@ -235,6 +235,45 @@ class MatrixTests(unittest.TestCase):
         self.assertEqual(len(payload["include"]), len(plan.SOURCES) * len(plan.MANAGERS))
         self.assertEqual(len(payload["include"]), 35)
 
+    def matrix_args(self, **overrides) -> SimpleNamespace:
+        values = dict(
+            all_sources="false",
+            kernel_source="aospa",
+            custom_repo="",
+            custom_ref="",
+            custom_fetch="git",
+            manager="all",
+            manager_ref="",
+            toolchain="auto",
+            toolchain_url="",
+            toolchain_sha256="",
+            device="marble",
+            source_ref="",
+            github_output="",
+        )
+        values.update(overrides)
+        return SimpleNamespace(**values)
+
+    def test_image_menu_skips_the_none_manager(self) -> None:
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            plan.emit_matrix(self.matrix_args(build_scope="image-menu"))
+        managers = [row["manager"] for row in json.loads(output.getvalue())["include"]]
+        self.assertNotIn("none", managers)
+        self.assertEqual(sorted(managers), sorted(m for m in plan.MANAGERS if m != "none"))
+
+    def test_image_menu_rejects_manager_none(self) -> None:
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            plan.emit_matrix(self.matrix_args(manager="none", build_scope="image-menu"))
+
+    def test_other_scopes_keep_the_none_manager(self) -> None:
+        for scope in ("image-only", "full"):
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                plan.emit_matrix(self.matrix_args(build_scope=scope))
+            managers = [row["manager"] for row in json.loads(output.getvalue())["include"]]
+            self.assertIn("none", managers, scope)
+
     def test_warns_when_one_checksum_covers_different_auto_toolchains(self) -> None:
         args = SimpleNamespace(
             all_sources="true",

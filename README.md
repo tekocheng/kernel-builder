@@ -67,6 +67,8 @@ The values below match the inputs declared in `.github/workflows/build.yml`.
 
 `all_sources` and `manager=all` expand into a matrix. If both are enabled, the workflow builds the Cartesian product of all configured sources and all configured managers. There are currently four sources and five manager entries (including `none`), so that combination schedules 20 build jobs.
 
+With `build_scope=image-menu`, the `none` manager is left out of the matrix because the menu ZIP needs a manager to patch in. `manager=all` then schedules the four real managers, and `manager=none` stops with an error before any job starts.
+
 Each matrix job has its own artifact named:
 
 ```text
