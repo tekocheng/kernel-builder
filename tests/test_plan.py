@@ -67,7 +67,7 @@ class PlanResolutionTests(unittest.TestCase):
         self.assertEqual(plan.normalize_run_id("false"), "off")
         self.assertEqual(plan.normalize_run_id(""), "auto")
         for bad in ("a b", "x;y", "a" * 25, "$(id)"):
-            with self.assertRaises(SystemExit):
+            with self.subTest(value=bad), contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
                 plan.normalize_run_id(bad)
 
     def test_a_source_can_still_opt_out_of_both_uname_parts(self) -> None:
@@ -178,7 +178,7 @@ class ManifestParserTests(unittest.TestCase):
                 encoding="utf-8",
             )
             with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
-                plan.manifest_project_rows(xml, [], "", "", root)
+                plan.manifest_project_rows(xml, [], "kernel", "", root)
 
     def test_include_path_traversal_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
