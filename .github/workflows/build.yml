@@ -115,12 +115,13 @@ on:
           - none
           - full
       build_scope:
-        description: "image-only flashes boot. full also builds in-tree modules, dtbs, and techpack."
+        description: "image-only flashes boot. full also builds in-tree modules, dtbs, and techpack. image-menu is image-only packaged as a stock Image plus ksu/susfs diffs with a Vol+/Vol- menu."
         type: choice
         default: image-only
         options:
           - image-only
           - full
+          - image-menu
       ccache:
         description: "Reuse compiler cache between runs"
         type: boolean
@@ -177,6 +178,7 @@ jobs:
           TOOLCHAIN: ${{ inputs.toolchain }}
           TOOLCHAIN_URL: ${{ inputs.toolchain_url }}
           TOOLCHAIN_SHA256: ${{ inputs.toolchain_sha256 }}
+          BUILD_SCOPE: ${{ inputs.build_scope }}
         run: bash scripts/build.sh
 
   build:

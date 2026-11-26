@@ -249,8 +249,8 @@ def write_plan(args: argparse.Namespace) -> None:
     toolchain, toolchain_entry = resolve_toolchain(args.toolchain, args.toolchain_url, args.toolchain_sha256, entry)
     if args.lto not in {"none", "thin", "full"}:
         die("lto must be none, thin, or full")
-    if args.build_scope not in {"image-only", "full"}:
-        die("build_scope must be image-only or full")
+    if args.build_scope not in {"image-only", "full", "image-menu"}:
+        die("build_scope must be image-only, full or image-menu")
 
     fetch = entry.get("fetch", "git")
     if fetch == "git":
@@ -537,6 +537,11 @@ def emit_matrix(args: argparse.Namespace) -> None:
     managers = list(MANAGERS) if args.manager == "all" else [args.manager]
     if args.manager != "all" and args.manager not in MANAGERS:
         die(f"Unknown manager '{args.manager}'. Known: {', '.join(MANAGERS)} or all")
+    if getattr(args, "build_scope", "image-only") == "image-menu":
+        # The menu ZIP needs a manager to patch in, so the "none" entry has nothing to build.
+        if args.manager == "none":
+            die("build_scope=image-menu needs a root manager. Pick one or use manager=all.")
+        managers = [manager for manager in managers if manager != "none"]
     load_device(args.device)
     # Validate common build options once, before any matrix jobs are scheduled.
     for entry in selected_entries:
@@ -612,6 +617,7 @@ def build_parser() -> argparse.ArgumentParser:
     matrix.add_argument("--toolchain-url", default="")
     matrix.add_argument("--toolchain-sha256", default="")
     matrix.add_argument("--all-sources", default="false")
+    matrix.add_argument("--build-scope", default="image-only")
     matrix.add_argument("--github-output", default="")
     matrix.set_defaults(func=emit_matrix)
     return parser

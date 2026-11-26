@@ -33,6 +33,10 @@ USE_CCACHE="${USE_CCACHE:-true}"
 ALL_SOURCES="${ALL_SOURCES:-false}"
 TOOLCHAIN_URL="${TOOLCHAIN_URL:-}"
 TOOLCHAIN_SHA256="${TOOLCHAIN_SHA256:-}"
+# kernel-only: one Image per ZIP (default). patch-menu: stock Image plus ksu/susfs diffs and a Vol+/Vol- menu.
+# The workflow selects patch-menu with build_scope=image-menu (GitHub allows at most 25 dispatch inputs).
+AK3_STYLE="${AK3_STYLE:-kernel-only}"
+HDIFFPATCH_REF="${HDIFFPATCH_REF:-v5.1.3}"
 
 SRC="${ROOT}/src"
 RELEASE="${ROOT}/release"
@@ -58,6 +62,7 @@ if [[ -n "${GITHUB_OUTPUT:-}" && "${MATRIX_ONLY:-}" == "1" ]]; then
     --toolchain-url "${TOOLCHAIN_URL}" \
     --toolchain-sha256 "${TOOLCHAIN_SHA256}" \
     --all-sources "${ALL_SOURCES}" \
+    --build-scope "${BUILD_SCOPE}" \
     --github-output "${GITHUB_OUTPUT}"
   exit 0
 fi
@@ -105,6 +110,14 @@ trap redact_plan_artifact EXIT
 set -a
 source "${RELEASE}/plan.env"
 set +a
+if [[ "${BUILD_SCOPE}" == "image-menu" ]]; then
+  AK3_STYLE="patch-menu"
+  BUILD_SCOPE="image-only"
+fi
+case "${AK3_STYLE}" in
+  kernel-only|patch-menu) ;;
+  *) die "Bad AK3_STYLE '${AK3_STYLE}'. Use kernel-only or patch-menu." ;;
+esac
 MANAGER_EFFECTIVE_REPO="${MANAGER_REPO:-n/a}"
 MANAGER_EFFECTIVE_REF="${MANAGER_REF:-n/a}"
 if [[ "${MANAGER}" == "none" ]]; then
@@ -578,6 +591,9 @@ make_kernel() {
   fi
   if [[ "${ENABLE_SUSFS}" == "true" ]]; then
     ( cd "${KERNEL_DIR}" && "${cfg[@]}" -e KSU_SUSFS )
+  elif [[ "${AK3_STYLE}" == "patch-menu" ]]; then
+    # Managers that carry KSU_SUSFS themselves must not turn it on in the plain KernelSU variant.
+    ( cd "${KERNEL_DIR}" && "${cfg[@]}" -d KSU_SUSFS ) || true
   fi
   if [[ "${BUILTIN_NOMOUNT}" == "true" ]]; then
     log "NoMount: keeping the source's own CONFIG_NOMOUNT setting"
@@ -779,14 +795,161 @@ PYAK
   fi
 }
 
+build_hdiffz() {
+  # hdiffz writes the diffs; hpatchz on the host checks that they apply.
+  local dir="${SRC}/HDiffPatch"
+  if [[ "${SKIP_APT:-}" != "1" ]]; then
+    sudo_cmd apt-get install -y --no-install-recommends libzstd-dev
+  fi
+  clone_ref "https://github.com/sisong/HDiffPatch.git" "${dir}" "${HDIFFPATCH_REF}"
+  git -C "${dir}" rev-parse HEAD > "${RELEASE}/hdiffpatch-commit.txt"
+  make -C "${dir}" -j"$(nproc)" hdiffz hpatchz \
+    LDEF=0 ZLIB=0 LZMA=0 BSD=0 BZIP2=0 VCD=0 DIR_DIFF=0 MD5=0 XXH=0 ZSTD=2 >/dev/null
+  HDIFFZ="${dir}/hdiffz"
+  HPATCHZ_HOST="${dir}/hpatchz"
+  [[ -x "${HDIFFZ}" && -x "${HPATCHZ_HOST}" ]] || die "HDiffPatch build did not produce hdiffz and hpatchz"
+}
+
+save_variant() {
+  local name="$1"
+  [[ -s "${RELEASE}/Image" ]] || die "patch-menu needs a plain Image, but the ${name} build produced none"
+  mkdir -p "${SRC}/variants"
+  cp -f "${RELEASE}/Image" "${SRC}/variants/Image_${name}"
+  log "Variant ${name}: $(sha1sum "${SRC}/variants/Image_${name}" | awk '{print $1}')"
+}
+
+build_patch_variants() {
+  [[ "${MANAGER}" != "none" ]] || die "build_scope=image-menu needs a root manager"
+  [[ "${BUILD_SCOPE}" == "image-only" ]] || die "build_scope=image-menu needs an image-only build"
+  if [[ "${ENABLE_NOMOUNT}" == "true" && "${BUILTIN_NOMOUNT}" != "true" ]]; then
+    die "build_scope=image-menu does not support enable_nomount yet"
+  fi
+  local manager="${MANAGER}" susfs="${ENABLE_SUSFS}"
+  rm -rf "${SRC}/variants"
+  # Same build number and timestamp in every variant, so the diffs only hold real changes.
+  export KBUILD_BUILD_VERSION=1
+  export KBUILD_BUILD_TIMESTAMP="$(date -u)"
+
+  # The kernel tree is patched step by step: stock, then the manager, then SUSFS.
+  # Each step is built on top of the previous one, so the diffs are all relative to stock.
+  log "Variant 1: stock (no manager)"
+  MANAGER=none
+  ENABLE_SUSFS=false
+  rm -f "${RELEASE}"/Image*
+  make_kernel
+  save_variant stock
+
+  log "Variant 2: ${manager}"
+  MANAGER="${manager}"
+  ENABLE_SUSFS=false
+  apply_manager
+  record_manager_commit
+  rm -f "${RELEASE}"/Image*
+  make_kernel
+  save_variant ksu
+
+  if [[ "${susfs}" == "true" ]]; then
+    log "Variant 3: ${manager} + SUSFS"
+    ENABLE_SUSFS=true
+    apply_susfs
+    rm -f "${RELEASE}"/Image*
+    make_kernel
+    save_variant susfs
+  fi
+  ENABLE_SUSFS="${susfs}"
+  apply_nomount
+  # Keep the stock image as release/Image: it is the one inside the ZIP.
+  cp -f "${SRC}/variants/Image_stock" "${RELEASE}/Image"
+}
+
+package_patch_zip() {
+  local ak="${ROOT}/ak3-work" v="${SRC}/variants"
+  rm -rf "${ak}"
+  clone_ref "${ANYKERNEL_REPO}" "${ak}" "${ANYKERNEL_REF}"
+  git -C "${ak}" rev-parse HEAD > "${RELEASE}/anykernel-commit.txt"
+  build_hdiffz
+
+  local has_susfs=false
+  [[ -s "${v}/Image_susfs" ]] && has_susfs=true
+  local version
+  version="$(tr -d '\n' < "${RELEASE}/susfs-version.txt" 2>/dev/null || true)"
+  local string="${DEVICE} ${SOURCE_DISPLAY}"
+  [[ -n "${KERNEL_NAME}" ]] && string="${string} (${KERNEL_NAME#-})"
+  string="${string} ${MANAGER_DISPLAY} menu"
+  [[ "${has_susfs}" == "true" ]] && string="${string} susfs"
+  [[ -n "${version}" ]] && string="${string} ${version}"
+  AK_KERNEL_STRING="${string}" AK_DEVICE_NAME_1="${DEVICE_NAME_1}" AK_DEVICE_NAME_2="${DEVICE_NAME_2}" \
+    python3 "${ROOT}/scripts/render_ak3.py" "${ROOT}/ak3/anykernel-patch.sh" "${ak}/anykernel.sh"
+  if [[ -z "${DEVICE_NAME_2}" ]]; then
+    sed -i '/^device.name2=/d' "${ak}/anykernel.sh"
+  fi
+
+  cp -f "${v}/Image_stock" "${ak}/Image"
+  mkdir -p "${ak}/bs_patches"
+  local sha_stock sha_ksu sha_susfs=""
+  sha_stock="$(sha1sum "${v}/Image_stock" | awk '{print $1}')"
+  sha_ksu="$(sha1sum "${v}/Image_ksu" | awk '{print $1}')"
+  [[ "${sha_stock}" != "${sha_ksu}" ]] || die "The KernelSU image is identical to the stock image"
+
+  make_diff() {
+    local name="$1" new="$2" want="$3" out="${ak}/bs_patches/$1.p" check="${SRC}/diff-check.bin"
+    "${HDIFFZ}" -m-1 -SD -c-zstd-21-24 -d -f "${v}/Image_stock" "${new}" "${out}" >/dev/null
+    "${HPATCHZ_HOST}" -f "${v}/Image_stock" "${out}" "${check}" >/dev/null
+    [[ "$(sha1sum "${check}" | awk '{print $1}')" == "${want}" ]] || die "${name}.p does not rebuild the ${name} image"
+    rm -f "${check}"
+    log "${name}.p: $(stat -c%s "${out}") bytes"
+  }
+  make_diff ksu "${v}/Image_ksu" "${sha_ksu}"
+  if [[ "${has_susfs}" == "true" ]]; then
+    sha_susfs="$(sha1sum "${v}/Image_susfs" | awk '{print $1}')"
+    make_diff susfs "${v}/Image_susfs" "${sha_susfs}"
+  fi
+  {
+    printf 'SHA1_STOCK="%s"\n' "${sha_stock}"
+    printf 'SHA1_KSU="%s"\n' "${sha_ksu}"
+    printf 'SHA1_SUSFS="%s"\n' "${sha_susfs}"
+  } > "${ak}/bs_patches/sha1.env"
+
+  cp -f "${ROOT}/ak3/tools-extra/hpatchz" "${ROOT}/ak3/tools-extra/keycheck" "${ak}/tools/"
+  chmod 755 "${ak}/tools/hpatchz" "${ak}/tools/keycheck"
+  rm -rf "${ak}/.git" "${ak}/README.md" "${ak}/"*.placeholder
+  local run="${GITHUB_RUN_NUMBER:-local}"
+  local name="${DEVICE}-${SOURCE_KEY}-${MANAGER}-menu-r${run}.zip"
+  (
+    cd "${ak}"
+    zip -r9 "${RELEASE}/${name}" . -x '.git/*'
+  )
+  ( cd "${RELEASE}" && sha256sum "${name}" > "${name}.sha256" )
+  write_build_metadata "${name}"
+  log "Packaged ${name}"
+  if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
+    {
+      echo "### ${name}"
+      echo
+      echo "Menu ZIP: stock Image plus \`ksu.p\`$( [[ "${has_susfs}" == "true" ]] && echo " and \`susfs.p\`")."
+      echo
+      echo "**Kernel uname:** \`$(cat "${RELEASE}/kernel-release.txt" 2>/dev/null)\`"
+      echo
+      echo '```'
+      cat "${RELEASE}/build-info.txt"
+      echo '```'
+    } >> "${GITHUB_STEP_SUMMARY}"
+  fi
+}
+
 install_deps
 fetch_tree
 resolve_defconfig_if_auto
 fetch_toolchain
-apply_manager
-apply_susfs
-record_manager_commit
-apply_nomount
-make_kernel
-package_zip
+if [[ "${AK3_STYLE}" == "patch-menu" ]]; then
+  build_patch_variants
+  package_patch_zip
+else
+  apply_manager
+  apply_susfs
+  record_manager_commit
+  apply_nomount
+  make_kernel
+  package_zip
+fi
 log "Done"

@@ -139,11 +139,17 @@ def validate() -> list[str]:
         "toolchain": sorted(["auto", *toolchains.keys()]),
         "custom_fetch": ["git", "manifest"],
         "lto": ["full", "none", "thin"],
-        "build_scope": ["full", "image-only"],
+        "build_scope": ["full", "image-menu", "image-only"],
     }
     for input_name, expected in expected_choices.items():
         actual = sorted(workflow_choice_options(workflow, input_name))
         require(actual == expected, f"Workflow choice '{input_name}' mismatch. Expected {expected}, found {actual}")
+
+    # GitHub rejects a workflow_dispatch with more than 25 inputs, and the whole workflow then fails to load.
+    dispatch_inputs = re.search(r"(?ms)^on:\n  workflow_dispatch:\n    inputs:\n(.*?)^(?=\S)", workflow)
+    require(dispatch_inputs is not None, "Cannot find the workflow_dispatch inputs in build.yml")
+    input_count = len(re.findall(r"(?m)^      [A-Za-z_][A-Za-z0-9_]*:\s*$", dispatch_inputs.group(1)))
+    require(input_count <= 25, f"build.yml declares {input_count} workflow_dispatch inputs; GitHub allows at most 25")
 
     required_inputs = {
         "kernel_name", "all_sources", "source_ref", "custom_repo", "custom_ref", "custom_fetch",
@@ -158,7 +164,13 @@ def validate() -> list[str]:
     for placeholder in ("__KERNEL_STRING__", "__DEVICE_NAME_1__", "__DEVICE_NAME_2__"):
         require(anykernel.count(placeholder) == 1, f"AnyKernel template must contain exactly one {placeholder}")
 
-    for script in ("scripts/plan.py", "scripts/build.sh", "scripts/validate.py", "scripts/safe_extract.py", "scripts/write_metadata.py", "scripts/redact_plan.py"):
+    patch_template = (ROOT / "ak3" / "anykernel-patch.sh").read_text(encoding="utf-8")
+    for placeholder in ("__KERNEL_STRING__", "__DEVICE_NAME_1__", "__DEVICE_NAME_2__"):
+        require(patch_template.count(placeholder) == 1, f"Patch-menu AnyKernel template must contain exactly one {placeholder}")
+    for tool in ("hpatchz", "keycheck"):
+        require((ROOT / "ak3" / "tools-extra" / tool).is_file(), f"Missing ak3/tools-extra/{tool}")
+
+    for script in ("scripts/plan.py", "scripts/build.sh", "scripts/validate.py", "scripts/safe_extract.py", "scripts/write_metadata.py", "scripts/redact_plan.py", "scripts/render_ak3.py"):
         require((ROOT / script).is_file(), f"Missing required script: {script}")
     build_script = (ROOT / "scripts" / "build.sh").read_text(encoding="utf-8")
     require("trap redact_plan_artifact EXIT" in build_script, "build.sh must redact plan.env on every exit")
