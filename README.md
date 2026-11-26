@@ -57,8 +57,7 @@ The values below match the inputs declared in `.github/workflows/build.yml`.
 | `toolchain_url` | HTTPS URL / empty | Optional direct link to a `.tar.gz` or `.tar.xz` compiler archive. When supplied, it overrides `toolchain` for that run. The archive must contain `bin/clang` at its root or within the supported directory depth. The URL must be HTTPS; embedded username/password credentials are rejected. The workflow log and build metadata do not expose URL credentials, query strings, or fragments. The uploaded `plan.env` is sanitized by an exit trap, including when a later build step fails. |
 | `toolchain_sha256` | 64-character SHA-256 / empty | Optional expected checksum for the selected archive. A mismatch stops the build before extraction. When omitted, the builder still records the downloaded archive's actual checksum but cannot verify it against a trusted expected value. |
 | `lto` | `thin` (default), `none`, `full` | Selects the kernel LTO configuration. See [LTO](#lto). |
-| `build_scope` | `image-only` (default), `full` | `image-only` builds the flashable kernel image. `full` also builds in-tree modules and DTBs, and builds the configured external SM8450 techpack modules where the source provides a techpack list. |
-| `ak3_style` | `kernel-only` (default), `patch-menu` | `kernel-only` puts one Image in the ZIP. `patch-menu` builds a stock Image plus KernelSU and SUSFS variants and ships the stock Image with two binary diffs; see [Patch-menu ZIP](#patch-menu-zip). Needs a root manager, `build_scope=image-only` and `enable_nomount=false`. |
+| `build_scope` | `image-only` (default), `full`, `image-menu` | `image-menu` is an image-only build packaged as a [Patch-menu ZIP](#patch-menu-zip). `image-only` builds the flashable kernel image. `full` also builds in-tree modules and DTBs, and builds the configured external SM8450 techpack modules where the source provides a techpack list. |
 | `ccache` | `true` (default), `false` | Enables compiler caching. The workflow also caches toolchain files, ccache data, and the ThinLTO cache between runs. |
 | `uname_hash` | `true` (default), `false` | Adds `-g<kernel commit>` to the kernel uname. |
 | `uname_run_id` | `auto` (default), `off`, or your own text | `auto` adds `-ab<run id>`. `off` adds nothing. Any other text (1 to 24 characters from letters, digits, `.`, `_`, `-`) is added as `-<text>`, for example `r35` gives `-r35`. With `uname_hash` also off and this set to `off`, the uname is the plain release string (kernel version plus `CONFIG_LOCALVERSION`). |
@@ -175,7 +174,7 @@ When files are produced, `full` adds `modules.tar.gz` and/or `dtbs.tar.gz` to th
 
 ## Patch-menu ZIP
 
-`ak3_style=patch-menu` packages the kernel the way the Bouquet Kernel installer does. Instead of one Image per ZIP, a single run builds three variants from the same tree, one on top of the other:
+`build_scope=image-menu` packages the kernel the way the Bouquet Kernel installer does. Instead of one Image per ZIP, a single run builds three variants from the same tree, one on top of the other:
 
 1. **stock**: no root manager.
 2. **ksu**: the selected manager, no SUSFS.

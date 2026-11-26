@@ -115,19 +115,13 @@ on:
           - none
           - full
       build_scope:
-        description: "image-only flashes boot. full also builds in-tree modules, dtbs, and techpack."
+        description: "image-only flashes boot. full also builds in-tree modules, dtbs, and techpack. image-menu is image-only packaged as a stock Image plus ksu/susfs diffs with a Vol+/Vol- menu."
         type: choice
         default: image-only
         options:
           - image-only
           - full
-      ak3_style:
-        description: "kernel-only: one Image per ZIP. patch-menu: stock Image plus ksu/susfs diffs, chosen with Vol+/Vol- at flash time (needs a manager, image-only, no NoMount)."
-        type: choice
-        default: kernel-only
-        options:
-          - kernel-only
-          - patch-menu
+          - image-menu
       ccache:
         description: "Reuse compiler cache between runs"
         type: boolean
@@ -254,7 +248,6 @@ jobs:
           TOOLCHAIN_SHA256: ${{ inputs.toolchain_sha256 }}
           LTO: ${{ inputs.lto }}
           BUILD_SCOPE: ${{ inputs.build_scope }}
-          AK3_STYLE: ${{ inputs.ak3_style }}
           USE_CCACHE: ${{ inputs.ccache }}
           USE_UNAME_HASH: ${{ inputs.uname_hash }}
           USE_UNAME_RUN_ID: ${{ inputs.uname_run_id }}

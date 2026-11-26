@@ -1,7 +1,7 @@
 # Extra AnyKernel3 tools for the patch-menu installer
 
 Prebuilt static Android binaries used only by `ak3/anykernel-patch.sh`
-(`ak3_style=patch-menu`). They are copied into the ZIP's `tools/` directory.
+(`build_scope=image-menu`). They are copied into the ZIP's `tools/` directory.
 
 | File | What it is | Used for |
 |---|---|---|

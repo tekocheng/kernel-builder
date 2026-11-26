@@ -249,8 +249,8 @@ def write_plan(args: argparse.Namespace) -> None:
     toolchain, toolchain_entry = resolve_toolchain(args.toolchain, args.toolchain_url, args.toolchain_sha256, entry)
     if args.lto not in {"none", "thin", "full"}:
         die("lto must be none, thin, or full")
-    if args.build_scope not in {"image-only", "full"}:
-        die("build_scope must be image-only or full")
+    if args.build_scope not in {"image-only", "full", "image-menu"}:
+        die("build_scope must be image-only, full or image-menu")
 
     fetch = entry.get("fetch", "git")
     if fetch == "git":

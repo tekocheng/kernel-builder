@@ -139,12 +139,17 @@ def validate() -> list[str]:
         "toolchain": sorted(["auto", *toolchains.keys()]),
         "custom_fetch": ["git", "manifest"],
         "lto": ["full", "none", "thin"],
-        "build_scope": ["full", "image-only"],
-        "ak3_style": ["kernel-only", "patch-menu"],
+        "build_scope": ["full", "image-menu", "image-only"],
     }
     for input_name, expected in expected_choices.items():
         actual = sorted(workflow_choice_options(workflow, input_name))
         require(actual == expected, f"Workflow choice '{input_name}' mismatch. Expected {expected}, found {actual}")
+
+    # GitHub rejects a workflow_dispatch with more than 25 inputs, and the whole workflow then fails to load.
+    dispatch_inputs = re.search(r"(?ms)^on:\n  workflow_dispatch:\n    inputs:\n(.*?)^(?=\S)", workflow)
+    require(dispatch_inputs is not None, "Cannot find the workflow_dispatch inputs in build.yml")
+    input_count = len(re.findall(r"(?m)^      [A-Za-z_][A-Za-z0-9_]*:\s*$", dispatch_inputs.group(1)))
+    require(input_count <= 25, f"build.yml declares {input_count} workflow_dispatch inputs; GitHub allows at most 25")
 
     required_inputs = {
         "kernel_name", "all_sources", "source_ref", "custom_repo", "custom_ref", "custom_fetch",

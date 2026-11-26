@@ -34,6 +34,7 @@ ALL_SOURCES="${ALL_SOURCES:-false}"
 TOOLCHAIN_URL="${TOOLCHAIN_URL:-}"
 TOOLCHAIN_SHA256="${TOOLCHAIN_SHA256:-}"
 # kernel-only: one Image per ZIP (default). patch-menu: stock Image plus ksu/susfs diffs and a Vol+/Vol- menu.
+# The workflow selects patch-menu with build_scope=image-menu (GitHub allows at most 25 dispatch inputs).
 AK3_STYLE="${AK3_STYLE:-kernel-only}"
 HDIFFPATCH_REF="${HDIFFPATCH_REF:-v5.1.3}"
 
@@ -43,11 +44,6 @@ mkdir -p "${SRC}"
 
 log() { printf '%s\n' "$*"; }
 die() { printf '::error::%s\n' "$*" >&2; exit 1; }
-
-case "${AK3_STYLE}" in
-  kernel-only|patch-menu) ;;
-  *) die "Bad ak3_style '${AK3_STYLE}'. Use kernel-only or patch-menu." ;;
-esac
 
 # shellcheck source=scripts/techpack.sh
 source "${ROOT}/scripts/techpack.sh"
@@ -113,6 +109,14 @@ trap redact_plan_artifact EXIT
 set -a
 source "${RELEASE}/plan.env"
 set +a
+if [[ "${BUILD_SCOPE}" == "image-menu" ]]; then
+  AK3_STYLE="patch-menu"
+  BUILD_SCOPE="image-only"
+fi
+case "${AK3_STYLE}" in
+  kernel-only|patch-menu) ;;
+  *) die "Bad AK3_STYLE '${AK3_STYLE}'. Use kernel-only or patch-menu." ;;
+esac
 MANAGER_EFFECTIVE_REPO="${MANAGER_REPO:-n/a}"
 MANAGER_EFFECTIVE_REF="${MANAGER_REF:-n/a}"
 if [[ "${MANAGER}" == "none" ]]; then
@@ -814,10 +818,10 @@ save_variant() {
 }
 
 build_patch_variants() {
-  [[ "${MANAGER}" != "none" ]] || die "ak3_style=patch-menu needs a root manager"
-  [[ "${BUILD_SCOPE}" == "image-only" ]] || die "ak3_style=patch-menu supports build_scope=image-only only"
+  [[ "${MANAGER}" != "none" ]] || die "build_scope=image-menu needs a root manager"
+  [[ "${BUILD_SCOPE}" == "image-only" ]] || die "build_scope=image-menu needs an image-only build"
   if [[ "${ENABLE_NOMOUNT}" == "true" && "${BUILTIN_NOMOUNT}" != "true" ]]; then
-    die "ak3_style=patch-menu does not support enable_nomount yet"
+    die "build_scope=image-menu does not support enable_nomount yet"
   fi
   local manager="${MANAGER}" susfs="${ENABLE_SUSFS}"
   rm -rf "${SRC}/variants"
