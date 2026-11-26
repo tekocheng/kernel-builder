@@ -121,6 +121,13 @@ on:
         options:
           - image-only
           - full
+      ak3_style:
+        description: "kernel-only: one Image per ZIP. patch-menu: stock Image plus ksu/susfs diffs, chosen with Vol+/Vol- at flash time (needs a manager, image-only, no NoMount)."
+        type: choice
+        default: kernel-only
+        options:
+          - kernel-only
+          - patch-menu
       ccache:
         description: "Reuse compiler cache between runs"
         type: boolean
@@ -247,6 +254,7 @@ jobs:
           TOOLCHAIN_SHA256: ${{ inputs.toolchain_sha256 }}
           LTO: ${{ inputs.lto }}
           BUILD_SCOPE: ${{ inputs.build_scope }}
+          AK3_STYLE: ${{ inputs.ak3_style }}
           USE_CCACHE: ${{ inputs.ccache }}
           USE_UNAME_HASH: ${{ inputs.uname_hash }}
           USE_UNAME_RUN_ID: ${{ inputs.uname_run_id }}

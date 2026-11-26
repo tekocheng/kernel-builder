@@ -58,6 +58,7 @@ The values below match the inputs declared in `.github/workflows/build.yml`.
 | `toolchain_sha256` | 64-character SHA-256 / empty | Optional expected checksum for the selected archive. A mismatch stops the build before extraction. When omitted, the builder still records the downloaded archive's actual checksum but cannot verify it against a trusted expected value. |
 | `lto` | `thin` (default), `none`, `full` | Selects the kernel LTO configuration. See [LTO](#lto). |
 | `build_scope` | `image-only` (default), `full` | `image-only` builds the flashable kernel image. `full` also builds in-tree modules and DTBs, and builds the configured external SM8450 techpack modules where the source provides a techpack list. |
+| `ak3_style` | `kernel-only` (default), `patch-menu` | `kernel-only` puts one Image in the ZIP. `patch-menu` builds a stock Image plus KernelSU and SUSFS variants and ships the stock Image with two binary diffs; see [Patch-menu ZIP](#patch-menu-zip). Needs a root manager, `build_scope=image-only` and `enable_nomount=false`. |
 | `ccache` | `true` (default), `false` | Enables compiler caching. The workflow also caches toolchain files, ccache data, and the ThinLTO cache between runs. |
 | `uname_hash` | `true` (default), `false` | Adds `-g<kernel commit>` to the kernel uname. |
 | `uname_run_id` | `auto` (default), `off`, or your own text | `auto` adds `-ab<run id>`. `off` adds nothing. Any other text (1 to 24 characters from letters, digits, `.`, `_`, `-`) is added as `-<text>`, for example `r35` gives `-r35`. With `uname_hash` also off and this set to `off`, the uname is the plain release string (kernel version plus `CONFIG_LOCALVERSION`). |
@@ -171,6 +172,31 @@ NoMount is controlled by the Boolean `enable_nomount` input. When enabled, the b
 The SM8450 techpack module list is [`config/techpack-sm8450.txt`](config/techpack-sm8450.txt). It is used only by sources that reference it in `config/sources.json` (currently `aospa`, `infinityx`, `lineage`, `shinkai` and `lunaris`). Missing individual module directories in that list are skipped with a warning. `melt` and `bouquet` do not currently define that external techpack list.
 
 When files are produced, `full` adds `modules.tar.gz` and/or `dtbs.tar.gz` to the build outputs. These archives are not inserted into the AnyKernel3 ZIP. Missing techpack directories remain optional and are skipped with a warning; the exact missing entries are written to `skipped-techpack.txt` so partial techpack coverage is visible in the artifact.
+
+## Patch-menu ZIP
+
+`ak3_style=patch-menu` packages the kernel the way the Bouquet Kernel installer does. Instead of one Image per ZIP, a single run builds three variants from the same tree, one on top of the other:
+
+1. **stock**: no root manager.
+2. **ksu**: the selected manager, no SUSFS.
+3. **susfs**: the manager plus SUSFS (only when `enable_susfs=true`).
+
+The ZIP holds the stock `Image`, `bs_patches/ksu.p` and `bs_patches/susfs.p` (HDiffPatch diffs against the stock Image), and `bs_patches/sha1.env` with the SHA-1 of all three images. At flash time the installer asks with the volume keys:
+
+- Vol+ on "KernelSU?" applies `ksu.p`, then asks about SUSFS and applies `susfs.p` instead on Vol+.
+- Vol- keeps the plain kernel. No key within 20 seconds counts as Vol-, so an install from an app without key input flashes the plain kernel instead of hanging.
+- The stock image is checked before patching and the result after patching. A mismatch aborts before anything is flashed.
+
+The builder verifies every diff on the runner too: it applies the diff to the stock Image and compares the SHA-1 with the variant it came from. The ZIP is named `<device>-<source>-<manager>-menu-r<run>.zip`.
+
+Limits:
+
+- Kernel image only, like the normal ZIP. It does not install modules, DTBs or `vendor_dlkm`, which some sources need to boot.
+- `enable_nomount` is not supported in this mode yet; the run stops with an error.
+- It builds the kernel three times in one job. The second and third builds are incremental, but the job is longer than a normal build.
+- The same build number and timestamp are used for all variants so the diffs stay small.
+- `ak3/tools-extra/` holds prebuilt `hpatchz` (aarch64) and `keycheck` (ARM) taken from the Bouquet Kernel v5.3 ZIP. See the README in that folder.
+- The CI runner builds `hdiffz` from [HDiffPatch](https://github.com/sisong/HDiffPatch) at `v5.1.3` (`HDIFFPATCH_REF`).
 
 ## Build outputs
 

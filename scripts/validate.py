@@ -140,6 +140,7 @@ def validate() -> list[str]:
         "custom_fetch": ["git", "manifest"],
         "lto": ["full", "none", "thin"],
         "build_scope": ["full", "image-only"],
+        "ak3_style": ["kernel-only", "patch-menu"],
     }
     for input_name, expected in expected_choices.items():
         actual = sorted(workflow_choice_options(workflow, input_name))
@@ -158,7 +159,13 @@ def validate() -> list[str]:
     for placeholder in ("__KERNEL_STRING__", "__DEVICE_NAME_1__", "__DEVICE_NAME_2__"):
         require(anykernel.count(placeholder) == 1, f"AnyKernel template must contain exactly one {placeholder}")
 
-    for script in ("scripts/plan.py", "scripts/build.sh", "scripts/validate.py", "scripts/safe_extract.py", "scripts/write_metadata.py", "scripts/redact_plan.py"):
+    patch_template = (ROOT / "ak3" / "anykernel-patch.sh").read_text(encoding="utf-8")
+    for placeholder in ("__KERNEL_STRING__", "__DEVICE_NAME_1__", "__DEVICE_NAME_2__"):
+        require(patch_template.count(placeholder) == 1, f"Patch-menu AnyKernel template must contain exactly one {placeholder}")
+    for tool in ("hpatchz", "keycheck"):
+        require((ROOT / "ak3" / "tools-extra" / tool).is_file(), f"Missing ak3/tools-extra/{tool}")
+
+    for script in ("scripts/plan.py", "scripts/build.sh", "scripts/validate.py", "scripts/safe_extract.py", "scripts/write_metadata.py", "scripts/redact_plan.py", "scripts/render_ak3.py"):
         require((ROOT / script).is_file(), f"Missing required script: {script}")
     build_script = (ROOT / "scripts" / "build.sh").read_text(encoding="utf-8")
     require("trap redact_plan_artifact EXIT" in build_script, "build.sh must redact plan.env on every exit")
