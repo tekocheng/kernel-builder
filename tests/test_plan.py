@@ -98,6 +98,17 @@ class PlanResolutionTests(unittest.TestCase):
         self.assertEqual(baka["MANAGER_REF"], "main")
         self.assertEqual(baka["ENABLE_SUSFS"], "true")
 
+    def test_kowsu_uses_the_official_susfs_path(self) -> None:
+        kow = plan.resolve_manager("kowsu", True, "")
+        self.assertEqual(kow["MANAGER_DISPLAY"], "KOWSU")
+        self.assertEqual(kow["MANAGER_REPO"], "KOWX712/KernelSU")
+        self.assertEqual(kow["MANAGER_REF"], "master")
+        self.assertEqual(kow["ENABLE_SUSFS"], "true")
+        # No manager-side SUSFS branch or fallback: the official hook patch is applied, as for kernelsu.
+        self.assertEqual(kow["MANAGER_SUSFS_FALLBACK_REPO"], "")
+        official = plan.resolve_manager("kernelsu", True, "")
+        self.assertEqual(kow["MANAGER_SETUP"], official["MANAGER_SETUP"])
+
     def test_toolchain_custom_url_hash_and_sha(self) -> None:
         name, entry = plan.resolve_toolchain(
             "auto",
@@ -233,7 +244,7 @@ class MatrixTests(unittest.TestCase):
             plan.emit_matrix(args)
         payload = json.loads(output.getvalue())
         self.assertEqual(len(payload["include"]), len(plan.SOURCES) * len(plan.MANAGERS))
-        self.assertEqual(len(payload["include"]), 35)
+        self.assertEqual(len(payload["include"]), 42)
 
     def matrix_args(self, **overrides) -> SimpleNamespace:
         values = dict(

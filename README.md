@@ -46,7 +46,7 @@ The values below match the inputs declared in `.github/workflows/build.yml`.
 | `custom_ref` | Text / empty | Required for a custom source unless `source_ref` is supplied. For Git, this is the kernel repository ref; for a manifest, it is the manifest repository ref. |
 | `custom_fetch` | `git` (default), `manifest` | Selects how the custom source is fetched. |
 | `custom_kernel_path` | Text / empty | Optional path to the kernel tree inside the fetched repository/manifest. Defaults to `.` for Git and `kernel_platform/xiaomi/sm8450` for a custom manifest. |
-| `manager` | `kernelsu` (default), `none`, `kernelsu-next`, `sukisu-nova`, `bakasu`, `all` | Selects the root manager. `all` builds every entry in `config/managers.json`, including `none`. |
+| `manager` | `kernelsu` (default), `none`, `kernelsu-next`, `sukisu-nova`, `bakasu`, `kowsu`, `all` | Selects the root manager. `all` builds every entry in `config/managers.json`, including `none`. |
 | `manager_ref` | Text / empty | Overrides the selected manager's branch, tag, or commit. If empty, the manager's configured ref is used (or its SUSFS-specific ref when applicable). |
 | `enable_susfs` | `true` (default), `false` | Enables the SUSFS kernel and manager integration when the selected manager supports it. `manager=none` disables SUSFS. |
 | `susfs_ref` | Text / empty | Optional SUSFS commit or tag. Empty uses the tip of the selected SUSFS branch. |
@@ -65,7 +65,7 @@ The values below match the inputs declared in `.github/workflows/build.yml`.
 
 ### Build matrix behavior
 
-`all_sources` and `manager=all` expand into a matrix. If both are enabled, the workflow builds the Cartesian product of all configured sources and all configured managers. There are currently four sources and five manager entries (including `none`), so that combination schedules 20 build jobs.
+`all_sources` and `manager=all` expand into a matrix. If both are enabled, the workflow builds the Cartesian product of all configured sources and all configured managers. There are currently seven sources and six manager entries (including `none`), so that combination schedules 42 build jobs.
 
 With `build_scope=image-menu`, the `none` manager is left out of the matrix because the menu ZIP needs a manager to patch in. `manager=all` then schedules the four real managers, and `manager=none` stops with an error before any job starts.
 
@@ -132,6 +132,7 @@ Manager definitions are stored in [`config/managers.json`](config/managers.json)
 | `kernelsu-next` | KernelSU-Next | [KernelSU-Next/KernelSU-Next](https://github.com/KernelSU-Next/KernelSU-Next), `dev` |
 | `sukisu-nova` | SukiSU Nova | [SukiSU-Nova/SukiSU-Nova](https://github.com/SukiSU-Nova/SukiSU-Nova), `main` |
 | `bakasu` | BakaSU | [Baka-SU/BakaSU](https://github.com/Baka-SU/BakaSU), `main` |
+| `kowsu` | KOWSU | [KOWX712/KernelSU](https://github.com/KOWX712/KernelSU), `master` |
 
 The builder fetches the configured manager's `setup` script and runs it in the kernel tree. Before setup, it removes stale KernelSU/KernelSU-Next directories or known in-tree locations so that a previously embedded manager does not silently replace the selected manager. It then checks that the expected manager Kconfig was created and that `CONFIG_KSU` remains enabled after `olddefconfig` (`y` or `m`).
 

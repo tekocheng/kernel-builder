@@ -63,6 +63,7 @@ on:
           - kernelsu-next
           - sukisu-nova
           - bakasu
+          - kowsu
           - all
       manager_ref:
         description: "Override the manager branch, tag, or commit"

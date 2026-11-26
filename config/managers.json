@@ -33,6 +33,14 @@
     "susfs": true,
     "notes": "SUSFS builds check out the builtin branch, which already carries manager-side KSU_SUSFS."
   },
+  "kowsu": {
+    "display": "KOWSU",
+    "repo": "KOWX712/KernelSU",
+    "ref": "master",
+    "setup": "kernel/setup.sh",
+    "susfs": true,
+    "notes": "KOWX712's KernelSU fork. SUSFS uses the same path as official KernelSU: the gki-android12-5.10 kernel patch plus 10_enable_susfs_for_ksu.patch from the same commit."
+  },
   "bakasu": {
     "display": "BakaSU",
     "repo": "Baka-SU/BakaSU",
