@@ -53,15 +53,25 @@ class PlanResolutionTests(unittest.TestCase):
         self.assertEqual(entry["manifest_ref"], "manifest-branch")
         self.assertEqual(entry["kernel_path"], "kernel_platform/xiaomi/sm8450")
 
-    def test_uname_switches_are_independent_for_every_source(self) -> None:
+    def test_uname_parts_are_independent_for_every_source(self) -> None:
         for key, entry in plan.SOURCES.items():
-            self.assertEqual(plan.resolve_uname_parts("true", "true", entry), (True, True), key)
-            self.assertEqual(plan.resolve_uname_parts("true", "false", entry), (True, False), key)
-            self.assertEqual(plan.resolve_uname_parts("false", "true", entry), (False, True), key)
-            self.assertEqual(plan.resolve_uname_parts("false", "false", entry), (False, False), key)
+            self.assertEqual(plan.resolve_uname_parts("true", "auto", entry), (True, "auto"), key)
+            self.assertEqual(plan.resolve_uname_parts("true", "off", entry), (True, "off"), key)
+            self.assertEqual(plan.resolve_uname_parts("false", "auto", entry), (False, "auto"), key)
+            self.assertEqual(plan.resolve_uname_parts("false", "off", entry), (False, "off"), key)
+
+    def test_uname_run_id_accepts_custom_text_and_old_values(self) -> None:
+        self.assertEqual(plan.normalize_run_id("r35"), "r35")
+        self.assertEqual(plan.normalize_run_id(" vertex.1 "), "vertex.1")
+        self.assertEqual(plan.normalize_run_id("true"), "auto")
+        self.assertEqual(plan.normalize_run_id("false"), "off")
+        self.assertEqual(plan.normalize_run_id(""), "auto")
+        for bad in ("a b", "x;y", "a" * 25, "$(id)"):
+            with self.assertRaises(SystemExit):
+                plan.normalize_run_id(bad)
 
     def test_a_source_can_still_opt_out_of_both_uname_parts(self) -> None:
-        self.assertEqual(plan.resolve_uname_parts("true", "true", {"uname_suffix": False}), (False, False))
+        self.assertEqual(plan.resolve_uname_parts("true", "r35", {"uname_suffix": False}), (False, "off"))
 
     def test_shinkai_uses_its_own_fragments(self) -> None:
         device = plan.load_device("marble")

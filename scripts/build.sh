@@ -9,9 +9,9 @@ cd "${ROOT}"
 DEVICE="${DEVICE:-marble}"
 KERNEL_NAME="${KERNEL_NAME:-}"
 UNAME_HASH="${UNAME_HASH:-true}"
-UNAME_RUN_ID="${UNAME_RUN_ID:-true}"
+UNAME_RUN_ID="${UNAME_RUN_ID:-auto}"
 USE_UNAME_HASH="${USE_UNAME_HASH:-true}"
-USE_UNAME_RUN_ID="${USE_UNAME_RUN_ID:-true}"
+USE_UNAME_RUN_ID="${USE_UNAME_RUN_ID:-auto}"
 BUILTIN_NOMOUNT="${BUILTIN_NOMOUNT:-false}"
 KERNEL_SOURCE="${KERNEL_SOURCE:-aosp}"
 SOURCE_REF="${SOURCE_REF:-}"
@@ -552,11 +552,11 @@ make_kernel() {
     ( cd "${KERNEL_DIR}" && "${cfg[@]}" --set-str LOCALVERSION "${localver}" ) || true
     log "Kernel localversion: ${localver} (${KBUILD_BUILD_USER}@${KBUILD_BUILD_HOST})"
   fi
-  # Optional uname suffix: -g<hash12> and/or -ab<run id>. .scmversion replaces the git detection
+  # Optional uname suffix: -g<hash12> and/or -ab<run id> (or your own text). .scmversion replaces the git detection
   # in scripts/setlocalversion, so no "-dirty" or "+" is ever appended; an empty one means a
   # plain release string (kernel version plus the source's CONFIG_LOCALVERSION).
   local scm=""
-  if [[ "${UNAME_HASH}" == "true" || "${UNAME_RUN_ID}" == "true" ]]; then
+  if [[ "${UNAME_HASH}" == "true" || "${UNAME_RUN_ID}" != "off" ]]; then
     ( cd "${KERNEL_DIR}" && "${cfg[@]}" -e LOCALVERSION_AUTO ) || true
     if [[ "${UNAME_HASH}" == "true" ]]; then
       local sha
@@ -564,9 +564,11 @@ make_kernel() {
         scm+="-g${sha}"
       fi
     fi
-    if [[ "${UNAME_RUN_ID}" == "true" ]]; then
-      scm+="-ab${GITHUB_RUN_ID:-0}"
-    fi
+    case "${UNAME_RUN_ID}" in
+      off) ;;
+      auto) scm+="-ab${GITHUB_RUN_ID:-0}" ;;
+      *) scm+="-${UNAME_RUN_ID}" ;;
+    esac
   fi
   printf '%s' "${scm}" > "${KERNEL_DIR}/.scmversion"
   printf '%s' "${scm}" > "${out}/.scmversion"

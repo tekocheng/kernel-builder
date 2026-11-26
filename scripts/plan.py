@@ -111,11 +111,26 @@ def uname_suffix_enabled(entry: dict) -> bool:
     return entry.get("uname_suffix", True) is not False
 
 
-def resolve_uname_parts(hash_on: str, run_id_on: str, entry: dict) -> tuple[bool, bool]:
-    """The two workflow switches decide; a source can still opt out of both with "uname_suffix": false."""
+UNAME_TEXT = re.compile(r"[A-Za-z0-9._-]{1,24}")
+
+
+def normalize_run_id(value: str) -> str:
+    """auto (-ab<run id>), off, or a custom text. The old true and false values still work."""
+    text = (value or "").strip()
+    if text.lower() in ("", "auto", "true"):
+        return "auto"
+    if text.lower() in ("off", "false"):
+        return "off"
+    if not UNAME_TEXT.fullmatch(text):
+        die("uname_run_id must be auto, off, or 1 to 24 characters from letters, digits, dot, underscore and dash.")
+    return text
+
+
+def resolve_uname_parts(hash_on: str, run_id: str, entry: dict) -> tuple[bool, str]:
+    """The two workflow inputs decide; a source can still opt out of both with "uname_suffix": false."""
     if not uname_suffix_enabled(entry):
-        return False, False
-    return truthy(hash_on), truthy(run_id_on)
+        return False, "off"
+    return truthy(hash_on), normalize_run_id(run_id)
 
 
 def builtin_nomount(entry: dict) -> bool:
@@ -273,7 +288,7 @@ def write_plan(args: argparse.Namespace) -> None:
         "SOURCE_REF_OVERRIDE": require_single_line(args.source_ref.strip(), "source_ref"),
         "DEFCONFIG_MODE": mode,
         "UNAME_HASH": "true" if resolve_uname_parts(getattr(args, "uname_hash", "true"), getattr(args, "uname_run_id", "true"), entry)[0] else "false",
-        "UNAME_RUN_ID": "true" if resolve_uname_parts(getattr(args, "uname_hash", "true"), getattr(args, "uname_run_id", "true"), entry)[1] else "false",
+        "UNAME_RUN_ID": resolve_uname_parts(getattr(args, "uname_hash", "true"), getattr(args, "uname_run_id", "auto"), entry)[1],
         "BUILTIN_NOMOUNT": "true" if builtin_nomount(entry) else "false",
         "TOOLCHAIN": toolchain,
         "TOOLCHAIN_URL": toolchain_entry["url"],
@@ -572,7 +587,7 @@ def build_parser() -> argparse.ArgumentParser:
     plan.add_argument("--build-scope", default="image-only")
     plan.add_argument("--ccache", default="true")
     plan.add_argument("--uname-hash", default="true")
-    plan.add_argument("--uname-run-id", default="true")
+    plan.add_argument("--uname-run-id", default="auto")
     plan.add_argument("--out", required=True)
     plan.set_defaults(func=write_plan)
 

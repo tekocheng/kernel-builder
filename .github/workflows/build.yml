@@ -130,9 +130,9 @@ on:
         type: boolean
         default: true
       uname_run_id:
-        description: "Add -ab<run id> to the kernel uname"
-        type: boolean
-        default: true
+        description: "Run id part of the kernel uname: auto = -ab<run id>, off = none, or your own text such as r35"
+        type: string
+        default: "auto"
       draft_release:
         description: "Create a draft GitHub release with the zip files"
         type: boolean
