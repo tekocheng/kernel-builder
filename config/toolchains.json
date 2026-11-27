@@ -1,7 +1,9 @@
 {
   "android-r596125": {
-    "url": "https://github.com/Neebe3289/aosp-clang/releases/download/clang-22.0.2-15682573/clang-22.0.2-15682573.tar.gz",
-    "notes": "AOSP Clang 22.0.2, based on Android r596125 (Neebe3289/aosp-clang release)."
+    "git": "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86",
+    "branch": "main-kernel",
+    "dir": "clang-r596125",
+    "notes": "Official Google AOSP clang-r596125 from android.googlesource.com (branch main-kernel), fetched with a sparse git checkout of that one directory."
   },
   "llvm-23.1.6": {
     "url": "https://github.com/llvm/llvm-project/releases/download/llvmorg-23.1.6/LLVM-23.1.6-Linux-X64.tar.xz",
