@@ -171,6 +171,17 @@ def validate() -> list[str]:
     for placeholder in ("__KERNEL_STRING__", "__DEVICE_NAME_1__", "__DEVICE_NAME_2__"):
         require(anykernel.count(placeholder) == 1, f"AnyKernel template must contain exactly one {placeholder}")
 
+    # Actions outside the "actions/" organisation run with sudo on the runner, so they must not float.
+    for workflow_file in sorted((ROOT / ".github" / "workflows").glob("*.yml")):
+        for match in re.finditer(r"(?m)^\s*(?:-\s*)?uses:\s*([^\s#]+)", workflow_file.read_text(encoding="utf-8")):
+            reference = match.group(1)
+            if reference.startswith(("actions/", "./")):
+                continue
+            require(
+                re.fullmatch(r".+@[0-9a-f]{40}", reference) is not None,
+                f"{workflow_file.name}: pin {reference} to a full commit SHA instead of a branch or tag",
+            )
+
     patch_template = (ROOT / "ak3" / "anykernel-patch.sh").read_text(encoding="utf-8")
     for placeholder in ("__KERNEL_STRING__", "__DEVICE_NAME_1__", "__DEVICE_NAME_2__"):
         require(patch_template.count(placeholder) == 1, f"Patch-menu AnyKernel template must contain exactly one {placeholder}")

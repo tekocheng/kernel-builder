@@ -150,7 +150,7 @@ concurrency:
 jobs:
   matrix:
     name: Plan
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       matrix: ${{ steps.gen.outputs.matrix }}
     steps:
@@ -185,7 +185,7 @@ jobs:
   build:
     name: ${{ matrix.source }} / ${{ matrix.manager }}
     needs: matrix
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 180
     strategy:
       fail-fast: false
@@ -207,7 +207,7 @@ jobs:
 
       - name: Free disk space (aggressive)
         if: ${{ fromJSON(steps.disk-space.outputs.available_gib) < 40 || inputs.lto != 'none' || inputs.build_scope != 'image-only' }}
-        uses: endersonmenezes/free-disk-space@main
+        uses: endersonmenezes/free-disk-space@24d3e2af1fe79ccdde8844605337a8835e20d012 # v4.1.0
         with:
           remove_android: true
           remove_dotnet: true
@@ -223,7 +223,7 @@ jobs:
 
       - name: Free disk space (light)
         if: ${{ fromJSON(steps.disk-space.outputs.available_gib) >= 40 && inputs.lto == 'none' && inputs.build_scope == 'image-only' }}
-        uses: endersonmenezes/free-disk-space@main
+        uses: endersonmenezes/free-disk-space@24d3e2af1fe79ccdde8844605337a8835e20d012 # v4.1.0
         with:
           remove_android: false
           remove_dotnet: true
@@ -236,7 +236,7 @@ jobs:
 
       - name: Set swap space
         if: ${{ inputs.lto != 'none' }}
-        uses: pierotofy/set-swap-space@master
+        uses: pierotofy/set-swap-space@fc79b3f67fa8a838184ce84a674ca12238d2c761 # master, pinned
         with:
           swap-size-gb: 16
 
@@ -245,12 +245,18 @@ jobs:
         run: sudo sysctl -w vm.swappiness=100
 
       - name: Report runner resources
+        env:
+          DISK_BEFORE_GIB: ${{ steps.disk-space.outputs.available_gib }}
         run: |
-          echo "### Runner resources after disk cleanup" >> "$GITHUB_STEP_SUMMARY"
-          echo "**Disk before cleanup:** ${{ steps.disk-space.outputs.available_gib }} GiB available" >> "$GITHUB_STEP_SUMMARY"
-          echo
-          df -h /
-          free -h
+          {
+            echo "### Runner resources"
+            echo "Disk available before cleanup: ${DISK_BEFORE_GIB} GiB"
+            echo '```'
+            df -h / /mnt 2>&1 || true
+            free -h
+            swapon --show
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Prepare toolchain cache identity
         env:
@@ -327,7 +333,7 @@ jobs:
     name: Draft release
     needs: build
     if: ${{ inputs.draft_release && needs.build.result == 'success' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
