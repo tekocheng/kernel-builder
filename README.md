@@ -55,7 +55,7 @@ The values below match the inputs declared in `.github/workflows/build.yml`.
 | `nomount_ref` | Text / empty | NoMount branch or tag. Empty uses the device default; for `marble`, `dev`. |
 | `toolchain` | `auto` (default), `android-r596125`, `llvm-23.1.6`, `llvm-slim-23.1.6`, `alchemist-llvm-23` | Selects a toolchain from `config/toolchains.json`. `auto` prefers the source's configured toolchain, then the global default. |
 | `toolchain_url` | HTTPS URL / empty | Optional direct link to a `.tar.gz` or `.tar.xz` compiler archive. When supplied, it overrides `toolchain` for that run. The archive must contain `bin/clang` at its root or within the supported directory depth. The URL must be HTTPS; embedded username/password credentials are rejected. The workflow log and build metadata do not expose URL credentials, query strings, or fragments. The uploaded `plan.env` is sanitized by an exit trap, including when a later build step fails. |
-| `toolchain_sha256` | 64-character SHA-256 / empty | Optional expected checksum for the selected archive. A mismatch stops the build before extraction. When omitted, the builder still records the downloaded archive's actual checksum but cannot verify it against a trusted expected value. |
+| `toolchain_sha256` | 64-character SHA-256 / empty | Optional expected checksum for the selected archive. It does not apply to the git toolchain `android-r596125`: choosing that toolchain yourself with a checksum stops with an error, while a checksum shared across `all_sources` is ignored for it with a warning. A mismatch stops the build before extraction. When omitted, the builder still records the downloaded archive's actual checksum but cannot verify it against a trusted expected value. |
 | `lto` | `thin` (default), `none`, `full` | Selects the kernel LTO configuration. See [LTO](#lto). |
 | `build_scope` | `image-only` (default), `full`, `image-menu` | `image-menu` is an image-only build packaged as a [Patch-menu ZIP](#patch-menu-zip). `image-only` builds the flashable kernel image. `full` also builds in-tree modules and DTBs, and builds the configured external SM8450 techpack modules where the source provides a techpack list. |
 | `ccache` | `true` (default), `false` | Enables compiler caching. The workflow also caches toolchain files, ccache data, and the ThinLTO cache between runs. |
@@ -109,12 +109,14 @@ Toolchain definitions live in [`config/toolchains.json`](config/toolchains.json)
 
 | Key | Compiler source | Configuration |
 |---|---|---|
-| `android-r596125` | [Neebe3289/aosp-clang](https://github.com/Neebe3289/aosp-clang), release `clang-22.0.2-15682573` | AOSP Clang 22.0.2 based on Android r596125. |
+| `android-r596125` | [Google AOSP prebuilts](https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86), branch `main-kernel`, directory `clang-r596125` | Official Google clang-r596125. Fetched with a sparse git checkout of that one directory, so no checksum applies; the checked-out commit is recorded instead. |
 | `llvm-23.1.6` | [LLVM Project](https://github.com/llvm/llvm-project/releases/tag/llvmorg-23.1.6) | Upstream LLVM 23.1.6; `max_jobs=2` caps parallel make jobs for this toolchain. It is marked as the global default. |
 | `llvm-slim-23.1.6` | [kernel.org slim LLVM](https://mirrors.edge.kernel.org/pub/tools/llvm/) | Slim LLVM 23.1.6 (`llvm-23.1.6-x86_64.tar.xz`); `max_jobs=2`. Not a global default. Used automatically for the `bouquet` source, matching the upstream `bouquet_ci` workflow. |
 | `alchemist-llvm-23` | [nekoshirro/Alchemist-LLVM](https://github.com/nekoshirro/Alchemist-LLVM) | Alchemist LLVM 23 (clang 23.0.1), release `lto-20261105`, pinned by SHA-256; `max_jobs=2`. Not a default. |
 
-The builder downloads and safely extracts the selected archive, locates `bin/clang`, and adds that toolchain's `bin` directory to `PATH`. Archive paths and links are checked before extraction. The workflow caches the `toolchains/` directory using a cache identity that includes the toolchain URL and expected checksum. A `toolchain_url` override takes precedence over the named toolchain and is stored in a URL-derived toolchain directory. Supply `toolchain_sha256` when a trusted checksum is available; a cached archive is reused only when its recorded checksum matches the expected value.
+A toolchain entry is either an archive (`url`) or a git directory (`git`, `branch`, `dir`). For a git entry the builder runs a shallow, filtered clone of the branch and checks out only `dir`, then records the commit in `toolchain-commit.txt` and in `build-manifest.json`. The first run downloads the whole clang directory, which is large; later runs reuse the Actions cache. `toolchain_sha256` is rejected for git entries, because a git checkout has no archive to hash.
+
+For an archive entry, the builder downloads and safely extracts the selected archive, locates `bin/clang`, and adds that toolchain's `bin` directory to `PATH`. Archive paths and links are checked before extraction. The workflow caches the `toolchains/` directory using a cache identity that includes the toolchain URL and expected checksum. A `toolchain_url` override takes precedence over the named toolchain and is stored in a URL-derived toolchain directory. Supply `toolchain_sha256` when a trusted checksum is available; a cached archive is reused only when its recorded checksum matches the expected value.
 
 ## LTO
 
@@ -403,7 +405,7 @@ This repository coordinates and automates the work of the projects below. Credit
 
 **Toolchains and packaging**
 
-- [Neebe3289/aosp-clang](https://github.com/Neebe3289/aosp-clang): prebuilt AOSP Clang releases, based on [Android's Clang prebuilts](https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86).
+- [Android Clang prebuilts](https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86): official Google clang used by `android-r596125`.
 - [LLVM Project](https://github.com/llvm/llvm-project): upstream LLVM releases.
 - [osm0sis/AnyKernel3](https://github.com/osm0sis/AnyKernel3): flashable ZIP template.
 

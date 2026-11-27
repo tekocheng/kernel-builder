@@ -116,7 +116,14 @@ def validate() -> list[str]:
 
     for key, toolchain in toolchains.items():
         require(bool(re.fullmatch(r"[a-z0-9][a-z0-9.-]*", key)), f"Invalid toolchain key: {key}")
-        require(str(toolchain.get("url", "")).startswith("https://"), f"Toolchain '{key}' needs an HTTPS url")
+        if toolchain.get("git"):
+            require(str(toolchain["git"]).startswith("https://"), f"Toolchain '{key}' needs an HTTPS git URL")
+            require(not toolchain.get("url"), f"Toolchain '{key}' must use either url or git, not both")
+            require(bool(re.fullmatch(r"[A-Za-z0-9._-]+", str(toolchain.get("branch", "")))), f"Toolchain '{key}' needs a valid git branch")
+            require(bool(re.fullmatch(r"[A-Za-z0-9._-]+", str(toolchain.get("dir", "")))), f"Toolchain '{key}' needs the clang directory name in 'dir'")
+            require(not toolchain.get("sha256"), f"Toolchain '{key}' is a git toolchain, so sha256 does not apply")
+        else:
+            require(str(toolchain.get("url", "")).startswith("https://"), f"Toolchain '{key}' needs an HTTPS url (or git, branch and dir)")
         if "max_jobs" in toolchain:
             require(isinstance(toolchain["max_jobs"], int) and toolchain["max_jobs"] > 0, f"Toolchain '{key}' max_jobs must be a positive integer")
         if toolchain.get("sha256"):

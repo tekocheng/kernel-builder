@@ -109,6 +109,32 @@ class PlanResolutionTests(unittest.TestCase):
         official = plan.resolve_manager("kernelsu", True, "")
         self.assertEqual(kow["MANAGER_SETUP"], official["MANAGER_SETUP"])
 
+    def test_android_toolchain_is_the_official_google_git_checkout(self) -> None:
+        name, entry = plan.resolve_toolchain("android-r596125", "", "", {})
+        self.assertEqual(name, "android-r596125")
+        self.assertEqual(entry["git"], "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86")
+        self.assertEqual(entry["branch"], "main-kernel")
+        self.assertEqual(entry["dir"], "clang-r596125")
+        self.assertNotIn("url", entry)
+
+    def test_git_toolchain_rejects_an_archive_checksum(self) -> None:
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            plan.resolve_toolchain("android-r596125", "", "a" * 64, {})
+
+    def test_git_toolchain_picked_by_a_source_ignores_a_shared_checksum(self) -> None:
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            name, entry = plan.resolve_toolchain("auto", "", "a" * 64, {"toolchain": "android-r596125"})
+        self.assertEqual(name, "android-r596125")
+        self.assertNotIn("sha256", entry)
+        self.assertIn("ignored for the git toolchain", stderr.getvalue())
+
+    def test_toolchain_url_still_wins_over_a_git_toolchain(self) -> None:
+        name, entry = plan.resolve_toolchain("android-r596125", "https://example.invalid/clang.tar.xz", "", {})
+        self.assertTrue(name.startswith("custom-"))
+        self.assertEqual(entry["url"], "https://example.invalid/clang.tar.xz")
+        self.assertNotIn("git", entry)
+
     def test_toolchain_custom_url_hash_and_sha(self) -> None:
         name, entry = plan.resolve_toolchain(
             "auto",

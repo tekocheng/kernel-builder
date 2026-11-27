@@ -109,6 +109,10 @@ def main() -> None:
         "url": toolchain_url,
         "expected_sha256": env.get("TOOLCHAIN_SHA256", ""),
         "archive_sha256": read_text(release, "toolchain-archive.sha256", ""),
+        "git": env.get("TOOLCHAIN_GIT", ""),
+        "git_branch": env.get("TOOLCHAIN_GIT_BRANCH", ""),
+        "git_dir": env.get("TOOLCHAIN_GIT_DIR", ""),
+        "git_commit": read_text(release, "toolchain-commit.txt", ""),
         "version": read_text(release, "toolchain-version.txt", ""),
     }
     build = {
@@ -174,7 +178,11 @@ def main() -> None:
         f"toolchain: {compiler['name']}",
         f"manifest_commit: {source['manifest_commit'] or 'n/a'}",
         f"anykernel_commit: {build['anykernel_commit'] or 'n/a'}",
-        f"toolchain_archive_sha256: {compiler['archive_sha256'] or 'not recorded'}",
+        (
+            f"toolchain_git_commit: {compiler['git_commit'] or 'not recorded'}"
+            if compiler["git"]
+            else f"toolchain_archive_sha256: {compiler['archive_sha256'] or 'not recorded'}"
+        ),
         f"lto: {build['lto']}",
         f"scope: {build['scope']}",
         f"skipped_techpack_count: {len(build['skipped_techpack'])}",

@@ -222,13 +222,19 @@ def resolve_toolchain(name: str, url: str, sha256: str, source: dict) -> tuple[s
             die("toolchain_url must not contain whitespace")
         return "custom-" + hashlib.sha1(url.encode()).hexdigest()[:8], {"url": url, "sha256": sha256}
     name = name.strip() or "auto"
+    chosen_by_user = name != "auto"
     if name == "auto":
         defaults = [key for key, value in TOOLCHAINS.items() if value.get("default")]
         name = source.get("toolchain") or (defaults[0] if defaults else "")
     if name not in TOOLCHAINS:
         die(f"Unknown toolchain '{name}'. Known: auto, {', '.join(TOOLCHAINS)}. Add it to config/toolchains.json")
     entry = dict(TOOLCHAINS[name])
-    if sha256:
+    if sha256 and entry.get("git"):
+        # A git checkout has no archive to hash. Refuse when the user picked it, ignore when a source picked it.
+        if chosen_by_user:
+            die(f"toolchain_sha256 does not apply to the git toolchain '{name}'. Leave it empty or use toolchain_url.")
+        print(f"::warning::toolchain_sha256 is ignored for the git toolchain '{name}'", file=sys.stderr)
+    elif sha256:
         entry["sha256"] = sha256
     return name, entry
 
@@ -291,7 +297,10 @@ def write_plan(args: argparse.Namespace) -> None:
         "UNAME_RUN_ID": resolve_uname_parts(getattr(args, "uname_hash", "true"), getattr(args, "uname_run_id", "auto"), entry)[1],
         "BUILTIN_NOMOUNT": "true" if builtin_nomount(entry) else "false",
         "TOOLCHAIN": toolchain,
-        "TOOLCHAIN_URL": toolchain_entry["url"],
+        "TOOLCHAIN_URL": toolchain_entry.get("url", ""),
+        "TOOLCHAIN_GIT": toolchain_entry.get("git", ""),
+        "TOOLCHAIN_GIT_BRANCH": toolchain_entry.get("branch", ""),
+        "TOOLCHAIN_GIT_DIR": toolchain_entry.get("dir", ""),
         "TOOLCHAIN_SHA256": toolchain_entry.get("sha256", ""),
         "TOOLCHAIN_MAX_JOBS": str(toolchain_entry.get("max_jobs", "")),
         "LTO": args.lto,

@@ -287,7 +287,47 @@ resolve_defconfig_if_auto() {
   log "Auto defconfig mode: ${DEFCONFIG_MODE} (${DEFCONFIG_SINGLE:-fragments})"
 }
 
+fetch_toolchain_git() {
+  # Official Google clang: one directory out of the AOSP prebuilts repository, same as the AOSPA builders.
+  local dir="${ROOT}/toolchains/${TOOLCHAIN}" tmp="${SRC}/toolchain-git" commit
+  local cache_identity cached_identity=""
+  cache_identity="$(printf '%s\n%s\n%s\n' "${TOOLCHAIN_GIT}" "${TOOLCHAIN_GIT_BRANCH}" "${TOOLCHAIN_GIT_DIR}" | sha256sum | awk '{print $1}')"
+  [[ -f "${dir}/.identity" ]] && cached_identity="$(tr -d '[:space:]' < "${dir}/.identity")"
+  if [[ -x "${dir}/bin/clang" && "${cached_identity}" != "${cache_identity}" ]]; then
+    log "Cached ${TOOLCHAIN} was created from a different git source; fetching again"
+    rm -rf "${dir}"
+  fi
+  if [[ ! -x "${dir}/bin/clang" ]]; then
+    log "Toolchain ${TOOLCHAIN}: ${TOOLCHAIN_GIT} ${TOOLCHAIN_GIT_BRANCH} / ${TOOLCHAIN_GIT_DIR}"
+    rm -rf "${tmp}" "${dir}"
+    mkdir -p "$(dirname "${dir}")"
+    git clone -n --depth=1 --filter=tree:0 -b "${TOOLCHAIN_GIT_BRANCH}" --single-branch "${TOOLCHAIN_GIT}" "${tmp}"
+    git -C "${tmp}" sparse-checkout init --cone
+    git -C "${tmp}" sparse-checkout set "${TOOLCHAIN_GIT_DIR}"
+    git -C "${tmp}" checkout -q
+    [[ -x "${tmp}/${TOOLCHAIN_GIT_DIR}/bin/clang" ]] || die "No bin/clang in ${TOOLCHAIN_GIT_DIR} of ${TOOLCHAIN_GIT} (${TOOLCHAIN_GIT_BRANCH})"
+    commit="$(git -C "${tmp}" rev-parse HEAD)"
+    mv "${tmp}/${TOOLCHAIN_GIT_DIR}" "${dir}"
+    printf '%s\n' "${commit}" > "${dir}/.commit"
+    printf '%s\n' "${cache_identity}" > "${dir}/.identity"
+    rm -rf "${tmp}"
+  fi
+  if [[ -s "${dir}/.commit" ]]; then
+    tr -d '[:space:]' < "${dir}/.commit" > "${RELEASE}/toolchain-commit.txt"
+  else
+    log "::warning::Using cached ${TOOLCHAIN} without a recorded git commit"
+  fi
+  TOOLCHAIN_BIN="${dir}/bin"
+  export PATH="${TOOLCHAIN_BIN}:${PATH}"
+  "${TOOLCHAIN_BIN}/clang" --version > "${RELEASE}/toolchain-version.txt"
+  sed -n '1,2p' "${RELEASE}/toolchain-version.txt"
+}
+
 fetch_toolchain() {
+  if [[ -n "${TOOLCHAIN_GIT}" ]]; then
+    fetch_toolchain_git
+    return
+  fi
   [[ -n "${TOOLCHAIN_URL}" ]] || die "No download URL for toolchain ${TOOLCHAIN}. See config/toolchains.json"
   local dir="${ROOT}/toolchains/${TOOLCHAIN}"
   local expected="${TOOLCHAIN_SHA256,,}" cached_sha="" cache_identity="" cached_identity=""
