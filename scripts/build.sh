@@ -861,14 +861,15 @@ save_variant() {
 build_patch_variants() {
   [[ "${MANAGER}" != "none" ]] || die "build_scope=image-menu needs a root manager"
   [[ "${BUILD_SCOPE}" == "image-only" ]] || die "build_scope=image-menu needs an image-only build"
-  if [[ "${ENABLE_NOMOUNT}" == "true" && "${BUILTIN_NOMOUNT}" != "true" ]]; then
-    die "build_scope=image-menu does not support enable_nomount yet"
-  fi
   local manager="${MANAGER}" susfs="${ENABLE_SUSFS}"
   rm -rf "${SRC}/variants"
   # Same build number and timestamp in every variant, so the diffs only hold real changes.
   export KBUILD_BUILD_VERSION=1
   export KBUILD_BUILD_TIMESTAMP="$(date -u)"
+
+  # NoMount is part of every variant, so it goes in first. Its setup only links fs/nomount and adds
+  # one line each to fs/Makefile and fs/Kconfig, which the SUSFS kernel patch does not depend on.
+  apply_nomount
 
   # The kernel tree is patched step by step: stock, then the manager, then SUSFS.
   # Each step is built on top of the previous one, so the diffs are all relative to stock.
@@ -897,7 +898,6 @@ build_patch_variants() {
     save_variant susfs
   fi
   ENABLE_SUSFS="${susfs}"
-  apply_nomount
   # Keep the stock image as release/Image: it is the one inside the ZIP.
   cp -f "${SRC}/variants/Image_stock" "${RELEASE}/Image"
 }

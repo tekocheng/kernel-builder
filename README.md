@@ -196,7 +196,7 @@ The builder verifies every diff on the runner too: it applies the diff to the st
 Limits:
 
 - Kernel image only, like the normal ZIP. It does not install modules, DTBs or `vendor_dlkm`, which some sources need to boot.
-- `enable_nomount` is not supported in this mode yet; the run stops with an error.
+- With `enable_nomount`, NoMount is applied once before the first build, so all three variants contain it and the diffs only carry the manager and SUSFS.
 - It builds the kernel three times in one job. The second and third builds are incremental, but the job is longer than a normal build.
 - The same build number and timestamp are used for all variants so the diffs stay small.
 - `ak3/tools-extra/` holds prebuilt `hpatchz` (aarch64) and `keycheck` (ARM) taken from the Bouquet Kernel v5.3 ZIP. See the README in that folder.
