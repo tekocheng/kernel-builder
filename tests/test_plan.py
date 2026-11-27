@@ -100,16 +100,19 @@ class PlanResolutionTests(unittest.TestCase):
         self.assertEqual(baka["MANAGER_REF"], "main")
         self.assertEqual(baka["ENABLE_SUSFS"], "true")
 
-    def test_kowsu_uses_the_official_susfs_path(self) -> None:
-        kow = plan.resolve_manager("kowsu", True, "")
+    def test_kowsu_builds_without_susfs(self) -> None:
+        kow = plan.resolve_manager("kowsu", False, "")
         self.assertEqual(kow["MANAGER_DISPLAY"], "KOWSU")
         self.assertEqual(kow["MANAGER_REPO"], "KOWX712/KernelSU")
         self.assertEqual(kow["MANAGER_REF"], "master")
-        self.assertEqual(kow["ENABLE_SUSFS"], "true")
-        # No manager-side SUSFS branch or fallback: the official hook patch is applied, as for kernelsu.
-        self.assertEqual(kow["MANAGER_SUSFS_FALLBACK_REPO"], "")
-        official = plan.resolve_manager("kernelsu", True, "")
-        self.assertEqual(kow["MANAGER_SETUP"], official["MANAGER_SETUP"])
+        self.assertEqual(kow["ENABLE_SUSFS"], "false")
+
+    def test_kowsu_with_susfs_is_refused_up_front(self) -> None:
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr), self.assertRaises(SystemExit):
+            plan.resolve_manager("kowsu", True, "")
+        self.assertIn("cannot be built with SUSFS", stderr.getvalue())
+        self.assertIn("enable_susfs=false", stderr.getvalue())
 
     def test_android_toolchain_is_the_official_google_git_checkout(self) -> None:
         name, entry = plan.resolve_toolchain("android-r596125", "", "", {})
@@ -267,12 +270,15 @@ class MatrixTests(unittest.TestCase):
             source_ref="",
             github_output="",
         )
-        output = io.StringIO()
-        with contextlib.redirect_stdout(output):
-            plan.emit_matrix(args)
-        payload = json.loads(output.getvalue())
-        self.assertEqual(len(payload["include"]), len(plan.SOURCES) * len(plan.MANAGERS))
-        self.assertEqual(len(payload["include"]), 42)
+        blocked = sum(1 for entry in plan.MANAGERS.values() if entry.get("susfs_blocked"))
+        for susfs, expected_managers in (("false", len(plan.MANAGERS)), ("true", len(plan.MANAGERS) - blocked)):
+            args.susfs = susfs
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output), contextlib.redirect_stderr(io.StringIO()):
+                plan.emit_matrix(args)
+            payload = json.loads(output.getvalue())
+            self.assertEqual(len(payload["include"]), len(plan.SOURCES) * expected_managers, susfs)
+        self.assertEqual(len(plan.SOURCES) * len(plan.MANAGERS), 42)
 
     def matrix_args(self, **overrides) -> SimpleNamespace:
         values = dict(
@@ -299,11 +305,36 @@ class MatrixTests(unittest.TestCase):
             plan.emit_matrix(self.matrix_args(build_scope="image-menu"))
         managers = [row["manager"] for row in json.loads(output.getvalue())["include"]]
         self.assertNotIn("none", managers)
-        self.assertEqual(sorted(managers), sorted(m for m in plan.MANAGERS if m != "none"))
+        expected = sorted(m for m in plan.MANAGERS if m != "none" and not plan.MANAGERS[m].get("susfs_blocked"))
+        self.assertEqual(sorted(managers), expected)
 
     def test_image_menu_rejects_manager_none(self) -> None:
         with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
             plan.emit_matrix(self.matrix_args(manager="none", build_scope="image-menu"))
+
+    def test_all_with_susfs_skips_blocked_managers_with_a_warning(self) -> None:
+        output, stderr = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(output), contextlib.redirect_stderr(stderr):
+            plan.emit_matrix(self.matrix_args(susfs="true"))
+        managers = [row["manager"] for row in json.loads(output.getvalue())["include"]]
+        self.assertNotIn("kowsu", managers)
+        self.assertIn("none", managers)
+        self.assertIn("Skipping KOWSU", stderr.getvalue())
+
+    def test_all_without_susfs_keeps_every_manager(self) -> None:
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output), contextlib.redirect_stderr(io.StringIO()):
+            plan.emit_matrix(self.matrix_args(susfs="false"))
+        managers = [row["manager"] for row in json.loads(output.getvalue())["include"]]
+        self.assertIn("kowsu", managers)
+
+    def test_choosing_a_blocked_manager_with_susfs_stops_in_the_plan_job(self) -> None:
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            plan.emit_matrix(self.matrix_args(manager="kowsu", susfs="true"))
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            plan.emit_matrix(self.matrix_args(manager="kowsu", susfs="false"))
+        self.assertEqual([row["manager"] for row in json.loads(output.getvalue())["include"]], ["kowsu"])
 
     def test_other_scopes_keep_the_none_manager(self) -> None:
         for scope in ("image-only", "full"):

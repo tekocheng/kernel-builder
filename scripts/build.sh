@@ -63,6 +63,7 @@ if [[ -n "${GITHUB_OUTPUT:-}" && "${MATRIX_ONLY:-}" == "1" ]]; then
     --toolchain-sha256 "${TOOLCHAIN_SHA256}" \
     --all-sources "${ALL_SOURCES}" \
     --build-scope "${BUILD_SCOPE}" \
+    --susfs "${ENABLE_SUSFS}" \
     --github-output "${GITHUB_OUTPUT}"
   exit 0
 fi
@@ -434,6 +435,12 @@ apply_patch() {
     ( cd "${dir}" && patch -p1 --forward --fuzz=3 < "${file}" )
     return 0
   fi
+  # Say which files and hunks missed, so the log shows the reason and not only the failure.
+  log "::group::Why $(basename "${file}") does not apply in ${dir##*/}"
+  ( cd "${dir}" && patch -p1 --dry-run --forward --fuzz=3 < "${file}" 2>&1 || true ) \
+    | awk '/^(patching|checking) file /{f=$3} /FAILED|can.t find file|Reversed|out of [0-9]+ hunk/ { if (f != last) { print f; last = f } print "  " $0 }' \
+    | head -n 40
+  log "::endgroup::"
   return 1
 }
 
@@ -496,10 +503,10 @@ apply_susfs() {
         kconfig="$(kconfig_path)" || die "Fallback manager setup failed"
         manager_root="$(dirname "$(dirname "${kconfig}")")"
         if ! grep -q '^config KSU_SUSFS$' "${kconfig}"; then
-          apply_patch "${manager_root}" "${hook}" || die "SUSFS manager patch does not apply. Pin manager_ref to a compatible commit."
+          apply_patch "${manager_root}" "${hook}" || die "SUSFS manager patch does not apply on the fallback manager either. See the hunks above; pin manager_ref to a commit the patch fits."
         fi
       else
-        die "SUSFS manager patch does not apply on ${MANAGER_REPO}@${MANAGER_REF}. Pin manager_ref."
+        die "SUSFS manager patch does not apply on ${MANAGER_REPO}@${MANAGER_REF}. See the hunks above. A fork that changed the same files cannot take the official patch, and pinning an older fork commit will not help; use another manager or enable_susfs=false."
       fi
     fi
   else

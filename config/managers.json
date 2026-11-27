@@ -39,7 +39,8 @@
     "ref": "master",
     "setup": "kernel/setup.sh",
     "susfs": true,
-    "notes": "KOWX712's KernelSU fork. SUSFS uses the same path as official KernelSU: the gki-android12-5.10 kernel patch plus 10_enable_susfs_for_ksu.patch from the same commit."
+    "susfs_blocked": "The official SUSFS manager patch does not apply to this fork: it changes sucompat.c, allowlist.c, boot_event.c and the supercall files that the patch edits. Use enable_susfs=false or another manager.",
+    "notes": "KOWX712's KernelSU fork (official KernelSU plus its own commits). Builds without SUSFS; SUSFS is blocked until a fork-specific patch exists."
   },
   "bakasu": {
     "display": "BakaSU",

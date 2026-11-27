@@ -183,6 +183,8 @@ def resolve_manager(name: str, susfs: bool, manager_ref: str) -> dict[str, str]:
             "MANAGER_SUSFS_FALLBACK_REF": "",
             "ENABLE_SUSFS": "false",
         }
+    if susfs and entry.get("susfs_blocked"):
+        die(f"{entry['display']} cannot be built with SUSFS: {entry['susfs_blocked']}")
     ref = require_single_line(manager_ref.strip(), "manager_ref")
     if not ref:
         ref = entry.get("susfs_ref") if susfs and entry.get("susfs_ref") else entry.get("ref", "")
@@ -551,6 +553,15 @@ def emit_matrix(args: argparse.Namespace) -> None:
         if args.manager == "none":
             die("build_scope=image-menu needs a root manager. Pick one or use manager=all.")
         managers = [manager for manager in managers if manager != "none"]
+    if truthy(getattr(args, "susfs", "true")):
+        for manager in list(managers):
+            reason = MANAGERS[manager].get("susfs_blocked")
+            if not reason:
+                continue
+            if args.manager != "all":
+                die(f"{MANAGERS[manager]['display']} cannot be built with SUSFS: {reason}")
+            print(f"::warning::Skipping {MANAGERS[manager]['display']} in this matrix: {reason}", file=sys.stderr)
+            managers.remove(manager)
     load_device(args.device)
     # Validate common build options once, before any matrix jobs are scheduled.
     for entry in selected_entries:
@@ -627,6 +638,7 @@ def build_parser() -> argparse.ArgumentParser:
     matrix.add_argument("--toolchain-sha256", default="")
     matrix.add_argument("--all-sources", default="false")
     matrix.add_argument("--build-scope", default="image-only")
+    matrix.add_argument("--susfs", default="true")
     matrix.add_argument("--github-output", default="")
     matrix.set_defaults(func=emit_matrix)
     return parser

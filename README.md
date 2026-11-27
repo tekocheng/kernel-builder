@@ -65,7 +65,7 @@ The values below match the inputs declared in `.github/workflows/build.yml`.
 
 ### Build matrix behavior
 
-`all_sources` and `manager=all` expand into a matrix. If both are enabled, the workflow builds the Cartesian product of all configured sources and all configured managers. There are currently seven sources and six manager entries (including `none`), so that combination schedules 42 build jobs.
+`all_sources` and `manager=all` expand into a matrix. If both are enabled, the workflow builds the Cartesian product of all configured sources and all configured managers. There are currently seven sources and six manager entries (including `none`), so that combination schedules 42 build jobs, or 35 while `enable_susfs=true`, because KOWSU is skipped then.
 
 With `build_scope=image-menu`, the `none` manager is left out of the matrix because the menu ZIP needs a manager to patch in. `manager=all` then schedules the four real managers, and `manager=none` stops with an error before any job starts.
 
@@ -134,7 +134,7 @@ Manager definitions are stored in [`config/managers.json`](config/managers.json)
 | `kernelsu-next` | KernelSU-Next | [KernelSU-Next/KernelSU-Next](https://github.com/KernelSU-Next/KernelSU-Next), `dev` |
 | `sukisu-nova` | SukiSU Nova | [SukiSU-Nova/SukiSU-Nova](https://github.com/SukiSU-Nova/SukiSU-Nova), `main` |
 | `bakasu` | BakaSU | [Baka-SU/BakaSU](https://github.com/Baka-SU/BakaSU), `main` |
-| `kowsu` | KOWSU | [KOWX712/KernelSU](https://github.com/KOWX712/KernelSU), `master` |
+| `kowsu` | KOWSU | [KOWX712/KernelSU](https://github.com/KOWX712/KernelSU), `master`. Builds without SUSFS only: the official SUSFS patch does not apply to this fork, so `enable_susfs=true` stops the run in the Plan job (and `manager=all` skips it with a warning). |
 
 The builder fetches the configured manager's `setup` script and runs it in the kernel tree. Before setup, it removes stale KernelSU/KernelSU-Next directories or known in-tree locations so that a previously embedded manager does not silently replace the selected manager. It then checks that the expected manager Kconfig was created and that `CONFIG_KSU` remains enabled after `olddefconfig` (`y` or `m`).
 
@@ -328,6 +328,7 @@ Optional manager fields:
 
 - `susfs`: set to `true` only when the manager tree supports the required SUSFS integration.
 - `susfs_ref`: alternate manager ref used by default when SUSFS is enabled, unless `manager_ref` overrides it.
+- `susfs_blocked`: reason text. When set, `enable_susfs=true` is refused for this manager before any build starts, and `manager=all` leaves it out of the matrix with a warning.
 - `susfs_fallback_repo` and `susfs_fallback_ref`: fallback manager source/ref used by the KernelSU-Next SUSFS path when the primary manager-side patch cannot be applied.
 
 There is no generic LKM build recipe or `lkm` manager flag in the current builder.
