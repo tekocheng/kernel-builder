@@ -132,7 +132,7 @@ on:
         type: boolean
         default: true
       uname_run_id:
-        description: "Run id part of the kernel uname: auto = -ab<run id>, off = none, or your own text such as r35"
+        description: "Run id part of the kernel uname: auto = -ab<run id>, off or none = nothing, or your own text such as r35"
         type: string
         default: "auto"
       draft_release:

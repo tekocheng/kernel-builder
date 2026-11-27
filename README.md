@@ -60,7 +60,7 @@ The values below match the inputs declared in `.github/workflows/build.yml`.
 | `build_scope` | `image-only` (default), `full`, `image-menu` | `image-menu` is an image-only build packaged as a [Patch-menu ZIP](#patch-menu-zip). `image-only` builds the flashable kernel image. `full` also builds in-tree modules and DTBs, and builds the configured external SM8450 techpack modules where the source provides a techpack list. |
 | `ccache` | `true` (default), `false` | Enables compiler caching. The workflow also caches toolchain files, ccache data, and the ThinLTO cache between runs. |
 | `uname_hash` | `true` (default), `false` | Adds `-g<kernel commit>` to the kernel uname. |
-| `uname_run_id` | `auto` (default), `off`, or your own text | `auto` adds `-ab<run id>`. `off` adds nothing. Any other text (1 to 24 characters from letters, digits, `.`, `_`, `-`) is added as `-<text>`, for example `r35` gives `-r35`. With `uname_hash` also off and this set to `off`, the uname is the plain release string (kernel version plus `CONFIG_LOCALVERSION`). |
+| `uname_run_id` | `auto` (default), `off` / `none`, or your own text | `auto` adds `-ab<run id>`. `off` or `none` adds nothing. Any other text (1 to 24 characters from letters, digits, `.`, `_`, `-`) is added as `-<text>`, for example `r35` gives `-r35`. With `uname_hash` also off and this set to `off`, the uname is the plain release string (kernel version plus `CONFIG_LOCALVERSION`). |
 | `draft_release` | `false` (default), `true` | On a fully successful build matrix, creates a draft GitHub release containing the ZIP files and their SHA-256 checksums. |
 
 ### Build matrix behavior

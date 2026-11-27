@@ -115,14 +115,14 @@ UNAME_TEXT = re.compile(r"[A-Za-z0-9._-]{1,24}")
 
 
 def normalize_run_id(value: str) -> str:
-    """auto (-ab<run id>), off, or a custom text. The old true and false values still work."""
+    """auto (-ab<run id>), off (also none or no), or a custom text. The old true and false values still work."""
     text = (value or "").strip()
     if text.lower() in ("", "auto", "true"):
         return "auto"
-    if text.lower() in ("off", "false"):
+    if text.lower() in ("off", "false", "none", "no"):
         return "off"
     if not UNAME_TEXT.fullmatch(text):
-        die("uname_run_id must be auto, off, or 1 to 24 characters from letters, digits, dot, underscore and dash.")
+        die("uname_run_id must be auto, off, none, or 1 to 24 characters from letters, digits, dot, underscore and dash.")
     return text
 
 

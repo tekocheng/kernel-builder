@@ -65,6 +65,8 @@ class PlanResolutionTests(unittest.TestCase):
         self.assertEqual(plan.normalize_run_id(" vertex.1 "), "vertex.1")
         self.assertEqual(plan.normalize_run_id("true"), "auto")
         self.assertEqual(plan.normalize_run_id("false"), "off")
+        for word in ("off", "none", "None", " NO "):
+            self.assertEqual(plan.normalize_run_id(word), "off", word)
         self.assertEqual(plan.normalize_run_id(""), "auto")
         for bad in ("a b", "x;y", "a" * 25, "$(id)"):
             with self.subTest(value=bad), contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):

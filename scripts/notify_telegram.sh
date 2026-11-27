@@ -46,11 +46,16 @@ send_document() {
     [[ -n "${sum}" ]] && caption+=$'\n'"sha256: ${sum}"
   fi
   # --form-string keeps a caption that starts with @ or < from being read as a file or a value.
-  curl -fsS --max-time 600 --config - \
+  # HTTP/1.1 and no Expect header avoid stalled large uploads. A stalled transfer is dropped after
+  # 90 seconds below 10 KB/s instead of waiting for the full time limit. The stats line holds no secret.
+  curl -fsS --http1.1 -H 'Expect:' --connect-timeout 20 --max-time 420 \
+    --speed-limit 10240 --speed-time 90 --config - \
     --form-string "chat_id=${TELEGRAM_CHAT_ID}" \
     --form-string "caption=${caption:0:1000}" \
     -F "document=@${zip_path}" \
-    <<< "$(api sendDocument)" > /dev/null
+    -o /dev/null \
+    --write-out 'Telegram upload: http=%{http_code} sent=%{size_upload}B speed=%{speed_upload}B/s time=%{time_total}s\n' \
+    <<< "$(api sendDocument)"
 }
 
 if [[ "${JOB_STATUS:-unknown}" == "success" && "${SEND_ZIP:-true}" != "false" && -s "${zip_path}" ]]; then
