@@ -271,6 +271,8 @@ Add a source object to [`config/sources.json`](config/sources.json). To select i
 
 Each build job can send a Telegram message when it succeeds, fails, or is cancelled. It is off until you add two repository secrets (Settings, Secrets and variables, Actions): `TELEGRAM_BOT_TOKEN` (from @BotFather) and `TELEGRAM_CHAT_ID` (your chat or channel ID; send the bot a message first). Without the secrets the step is skipped. The message names the device, source, and manager, and includes the kernel uname, the zip name, and the run link when they exist. A failed notification never fails the build. With `all_sources`, expect one message per build.
 
+When a build succeeds, the zip is sent as a file with that message as its caption (it also carries the zip's SHA-256), so you can flash it straight from the chat. Telegram bots can upload files up to 50 MB; a larger zip is not sent, and the message says so and points to the run page. A failed upload falls back to the plain text message. To keep the text message only, add a repository variable named `TELEGRAM_SEND_ZIP` (Settings, Secrets and variables, Actions, Variables tab) with the value `false`. This is a variable and not a workflow input because GitHub allows at most 25 dispatch inputs.
+
 ### Manifest source example
 
 ```json

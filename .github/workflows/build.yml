@@ -270,6 +270,7 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          SEND_ZIP: ${{ vars.TELEGRAM_SEND_ZIP }}
           JOB_STATUS: ${{ job.status }}
           DEVICE: ${{ inputs.device }}
           SOURCE: ${{ matrix.source }}
