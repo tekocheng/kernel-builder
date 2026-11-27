@@ -195,7 +195,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Free disk space
+      # Use the runner's measured free space and selected build mode to avoid
+      # expensive cleanup on light builds while keeping headroom for LTO/full builds.
+      - name: Check runner disk space
+        id: disk-space
+        run: |
+          available_gib="$(df --output=avail -BG / | tail -n1 | tr -dc '0-9')"
+          echo "available_gib=${available_gib}" >> "$GITHUB_OUTPUT"
+          echo "Disk available before cleanup: ${available_gib} GiB"
+          df -h /
+
+      - name: Free disk space (aggressive)
+        if: ${{ fromJSON(steps.disk-space.outputs.available_gib) < 40 || inputs.lto != 'none' || inputs.build_scope != 'image-only' }}
         uses: endersonmenezes/free-disk-space@main
         with:
           remove_android: true
@@ -210,14 +221,34 @@ jobs:
           rmz_version: "3.2.0"
           testing: false
 
+      - name: Free disk space (light)
+        if: ${{ fromJSON(steps.disk-space.outputs.available_gib) >= 40 && inputs.lto == 'none' && inputs.build_scope == 'image-only' }}
+        uses: endersonmenezes/free-disk-space@main
+        with:
+          remove_android: false
+          remove_dotnet: true
+          remove_haskell: true
+          remove_tool_cache: false
+          remove_swap: false
+          rm_cmd: "rmz"
+          rmz_version: "3.2.0"
+          testing: false
+
       - name: Set swap space
+        if: ${{ inputs.lto != 'none' }}
         uses: pierotofy/set-swap-space@master
         with:
           swap-size-gb: 16
 
       - name: Increase memory swap usage
+        if: ${{ inputs.lto != 'none' }}
+        run: sudo sysctl -w vm.swappiness=100
+
+      - name: Report runner resources
         run: |
-          sudo sysctl -w vm.swappiness=100
+          echo "### Runner resources after disk cleanup" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Disk before cleanup:** ${{ steps.disk-space.outputs.available_gib }} GiB available" >> "$GITHUB_STEP_SUMMARY"
+          echo
           df -h /
           free -h
 
@@ -300,6 +331,12 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
       - name: Download zips
         uses: actions/download-artifact@v6
         with:

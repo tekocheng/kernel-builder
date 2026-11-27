@@ -158,10 +158,9 @@ install_deps() {
   sudo_cmd apt-get update
   sudo_cmd apt-get install -y --no-install-recommends \
     bc bison build-essential ca-certificates ccache clang cpio curl file flex \
-    git libelf-dev libncurses-dev libssl-dev lld llvm patch python3 rsync \
+    git jq kmod libelf-dev libncurses-dev libssl-dev lld llvm patch python3 python-is-python3 rsync \
     unzip xz-utils zip zstd device-tree-compiler
 }
-
 clone_ref() {
   local url="$1" dest="$2" ref="$3"
   local branch="${ref#refs/heads/}"
