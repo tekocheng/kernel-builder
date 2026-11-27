@@ -150,7 +150,7 @@ concurrency:
 jobs:
   matrix:
     name: Plan
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.gen.outputs.matrix }}
     steps:
@@ -185,7 +185,7 @@ jobs:
   build:
     name: ${{ matrix.source }} / ${{ matrix.manager }}
     needs: matrix
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 180
     strategy:
       fail-fast: false
@@ -251,6 +251,7 @@ jobs:
           LTO: ${{ inputs.lto }}
           BUILD_SCOPE: ${{ inputs.build_scope }}
           USE_CCACHE: ${{ inputs.ccache }}
+          JOBS: "4"
           USE_UNAME_HASH: ${{ inputs.uname_hash }}
           USE_UNAME_RUN_ID: ${{ inputs.uname_run_id }}
         run: bash scripts/build.sh
@@ -283,7 +284,7 @@ jobs:
     name: Draft release
     needs: build
     if: ${{ inputs.draft_release && needs.build.result == 'success' }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
