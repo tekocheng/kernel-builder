@@ -7,6 +7,7 @@
     "susfs": false
   },
   "kernelsu": {
+    "aliases": ["ksu"],
     "display": "KernelSU",
     "repo": "tiann/KernelSU",
     "ref": "main",
@@ -15,6 +16,7 @@
     "notes": "Official KernelSU. SUSFS is the gki-android12-5.10 kernel patch plus 10_enable_susfs_for_ksu.patch from the same commit."
   },
   "kernelsu-next": {
+    "aliases": ["ksunext", "next"],
     "display": "KernelSU-Next",
     "repo": "KernelSU-Next/KernelSU-Next",
     "ref": "dev",
@@ -25,6 +27,7 @@
     "notes": "Official dev first. If that tree still has no KSU_SUSFS and the official patch does not apply, fall back to pershoot dev-susfs."
   },
   "sukisu-nova": {
+    "aliases": ["sukisu", "suki", "nova"],
     "display": "SukiSU Nova",
     "repo": "SukiSU-Nova/SukiSU-Nova",
     "ref": "main",
@@ -34,6 +37,7 @@
     "notes": "SUSFS builds check out the builtin branch, which already carries manager-side KSU_SUSFS."
   },
   "kowsu": {
+    "aliases": ["kow"],
     "display": "KOWSU",
     "repo": "KOWX712/KernelSU",
     "ref": "master",
@@ -43,6 +47,7 @@
     "notes": "KOWX712's KernelSU fork (official KernelSU plus its own commits). Builds without SUSFS; SUSFS is blocked until a fork-specific patch exists."
   },
   "bakasu": {
+    "aliases": ["baka"],
     "display": "BakaSU",
     "repo": "Baka-SU/BakaSU",
     "ref": "main",

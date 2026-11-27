@@ -100,6 +100,25 @@ class PlanResolutionTests(unittest.TestCase):
         self.assertEqual(baka["MANAGER_REF"], "main")
         self.assertEqual(baka["ENABLE_SUSFS"], "true")
 
+    def test_parse_managers_takes_a_list_with_short_names(self) -> None:
+        self.assertEqual(plan.parse_managers("kernelsu,kernelsu-next,sukisu-nova"), (["kernelsu", "kernelsu-next", "sukisu-nova"], False))
+        self.assertEqual(plan.parse_managers(" KSU, ksunext  sukisu ")[0], ["kernelsu", "kernelsu-next", "sukisu-nova"])
+        self.assertEqual(plan.parse_managers("ksu,kernelsu,ksu")[0], ["kernelsu"])
+        self.assertEqual(plan.parse_managers("next;suki")[0], ["kernelsu-next", "sukisu-nova"])
+
+    def test_parse_managers_default_all_and_unknown(self) -> None:
+        self.assertEqual(plan.parse_managers(""), (["kernelsu"], False))
+        managers, picked_all = plan.parse_managers("ksu, all")
+        self.assertTrue(picked_all)
+        self.assertEqual(managers, list(plan.MANAGERS))
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr), self.assertRaises(SystemExit):
+            plan.parse_managers("ksu,nope")
+        self.assertIn("Unknown manager 'nope'", stderr.getvalue())
+
+    def test_resolve_manager_accepts_a_short_name(self) -> None:
+        self.assertEqual(plan.resolve_manager("ksunext", False, "")["MANAGER"], "kernelsu-next")
+
     def test_kowsu_builds_without_susfs(self) -> None:
         kow = plan.resolve_manager("kowsu", False, "")
         self.assertEqual(kow["MANAGER_DISPLAY"], "KOWSU")
@@ -311,6 +330,28 @@ class MatrixTests(unittest.TestCase):
     def test_image_menu_rejects_manager_none(self) -> None:
         with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
             plan.emit_matrix(self.matrix_args(manager="none", build_scope="image-menu"))
+
+    def test_a_manager_list_expands_to_those_managers_only(self) -> None:
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            plan.emit_matrix(self.matrix_args(manager="ksu,ksunext,sukisu"))
+        rows = json.loads(output.getvalue())["include"]
+        self.assertEqual([row["manager"] for row in rows], ["kernelsu", "kernelsu-next", "sukisu-nova"])
+
+    def test_a_list_with_a_blocked_manager_stops_when_susfs_is_on(self) -> None:
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            plan.emit_matrix(self.matrix_args(manager="ksu,kowsu", susfs="true"))
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            plan.emit_matrix(self.matrix_args(manager="ksu,kowsu", susfs="false"))
+        self.assertEqual([row["manager"] for row in json.loads(output.getvalue())["include"]], ["kernelsu", "kowsu"])
+
+    def test_image_menu_leaves_none_out_of_a_list(self) -> None:
+        output, stderr = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(output), contextlib.redirect_stderr(stderr):
+            plan.emit_matrix(self.matrix_args(manager="none,ksu", build_scope="image-menu"))
+        self.assertEqual([row["manager"] for row in json.loads(output.getvalue())["include"]], ["kernelsu"])
+        self.assertIn("Leaving 'none' out", stderr.getvalue())
 
     def test_all_with_susfs_skips_blocked_managers_with_a_warning(self) -> None:
         output, stderr = io.StringIO(), io.StringIO()

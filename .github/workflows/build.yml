@@ -54,17 +54,9 @@ on:
         type: string
         default: ""
       manager:
-        description: "Root manager. all builds every manager in config/managers.json."
-        type: choice
+        description: "Root managers, comma separated: kernelsu, kernelsu-next, sukisu-nova, bakasu, kowsu, none, or all. Short names work too: ksu, ksunext, sukisu."
+        type: string
         default: kernelsu
-        options:
-          - none
-          - kernelsu
-          - kernelsu-next
-          - sukisu-nova
-          - bakasu
-          - kowsu
-          - all
       manager_ref:
         description: "Override the manager branch, tag, or commit"
         type: string

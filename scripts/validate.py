@@ -142,12 +142,17 @@ def validate() -> list[str]:
     expected_choices = {
         "device": sorted(devices),
         "kernel_source": sorted([*sources.keys(), "custom"]),
-        "manager": sorted([*managers.keys(), "all"]),
         "toolchain": sorted(["auto", *toolchains.keys()]),
         "custom_fetch": ["git", "manifest"],
         "lto": ["full", "none", "thin"],
         "build_scope": ["full", "image-menu", "image-only"],
     }
+    seen_names = {*managers.keys(), "all"}
+    for key, entry in managers.items():
+        for alias in entry.get("aliases", []):
+            require(bool(re.fullmatch(r"[a-z0-9-]+", alias)), f"Manager '{key}' has a bad short name '{alias}'")
+            require(alias not in seen_names, f"Short name '{alias}' of manager '{key}' is already used")
+            seen_names.add(alias)
     for input_name, expected in expected_choices.items():
         actual = sorted(workflow_choice_options(workflow, input_name))
         require(actual == expected, f"Workflow choice '{input_name}' mismatch. Expected {expected}, found {actual}")

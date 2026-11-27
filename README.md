@@ -46,7 +46,7 @@ The values below match the inputs declared in `.github/workflows/build.yml`.
 | `custom_ref` | Text / empty | Required for a custom source unless `source_ref` is supplied. For Git, this is the kernel repository ref; for a manifest, it is the manifest repository ref. |
 | `custom_fetch` | `git` (default), `manifest` | Selects how the custom source is fetched. |
 | `custom_kernel_path` | Text / empty | Optional path to the kernel tree inside the fetched repository/manifest. Defaults to `.` for Git and `kernel_platform/xiaomi/sm8450` for a custom manifest. |
-| `manager` | `kernelsu` (default), `none`, `kernelsu-next`, `sukisu-nova`, `bakasu`, `kowsu`, `all` | Selects the root manager. `all` builds every entry in `config/managers.json`, including `none`. |
+| `manager` | Text, default `kernelsu` | One or more managers separated by commas or spaces, for example `kernelsu,kernelsu-next,sukisu-nova`, or `all`. Names: `none`, `kernelsu`, `kernelsu-next`, `sukisu-nova`, `bakasu`, `kowsu`. Short names work too: `ksu`, `ksunext` (or `next`), `sukisu` (or `suki`, `nova`), `baka`, `kow`. Each manager becomes one build job. `all` builds every entry in `config/managers.json`, including `none`. GitHub has no multi-select input, so this is a text field; an unknown name stops the run in the Plan job and lists the valid names. |
 | `manager_ref` | Text / empty | Overrides the selected manager's branch, tag, or commit. If empty, the manager's configured ref is used (or its SUSFS-specific ref when applicable). |
 | `enable_susfs` | `true` (default), `false` | Enables the SUSFS kernel and manager integration when the selected manager supports it. `manager=none` disables SUSFS. |
 | `susfs_ref` | Text / empty | Optional SUSFS commit or tag. Empty uses the tip of the selected SUSFS branch. |
@@ -322,10 +322,11 @@ For a custom Git source, `source_ref` takes precedence over `custom_ref` when bo
 
 ## Add a manager
 
-Add an entry to [`config/managers.json`](config/managers.json) and add its key to the `manager` options in `.github/workflows/build.yml`. The resolver expects a `display`, `repo`, `ref`, and `setup` value. The setup script must create a Kconfig at one of the paths checked by `scripts/build.sh` (`KernelSU/kernel/Kconfig` or `KernelSU-Next/kernel/Kconfig`).
+Add an entry to [`config/managers.json`](config/managers.json). The `manager` input is a text field, so the workflow needs no change; mention the new key in its description if you like. The resolver expects a `display`, `repo`, `ref`, and `setup` value. The setup script must create a Kconfig at one of the paths checked by `scripts/build.sh` (`KernelSU/kernel/Kconfig` or `KernelSU-Next/kernel/Kconfig`).
 
 Optional manager fields:
 
+- `aliases`: short names accepted in the `manager` input, lowercase letters, digits and dashes. They must not repeat another manager key or short name.
 - `susfs`: set to `true` only when the manager tree supports the required SUSFS integration.
 - `susfs_ref`: alternate manager ref used by default when SUSFS is enabled, unless `manager_ref` overrides it.
 - `susfs_blocked`: reason text. When set, `enable_susfs=true` is refused for this manager before any build starts, and `manager=all` leaves it out of the matrix with a warning.

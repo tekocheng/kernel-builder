@@ -21,6 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SOURCES = json.loads((ROOT / "config" / "sources.json").read_text(encoding="utf-8"))
 MANAGERS = json.loads((ROOT / "config" / "managers.json").read_text(encoding="utf-8"))
 TOOLCHAINS = json.loads((ROOT / "config" / "toolchains.json").read_text(encoding="utf-8"))
+MANAGER_ALIASES = {alias.lower(): key for key, entry in MANAGERS.items() for alias in entry.get("aliases", [])}
 
 
 class PlanError(Exception):
@@ -168,9 +169,35 @@ def source_entry(key: str, args: argparse.Namespace) -> dict:
     return SOURCES[key]
 
 
+def canonical_manager(name: str) -> str:
+    """A manager key or one of its short names (ksu, ksunext, sukisu, ...) as the manager key."""
+    text = name.strip().lower()
+    if text in MANAGERS:
+        return text
+    if text in MANAGER_ALIASES:
+        return MANAGER_ALIASES[text]
+    short = ", ".join(sorted(MANAGER_ALIASES))
+    die(f"Unknown manager '{name.strip()}'. Known: {', '.join(MANAGERS)}; short names: {short}; or all")
+    raise AssertionError("unreachable")
+
+
+def parse_managers(text: str) -> tuple[list[str], bool]:
+    """Managers from a comma or space separated list, in the order given, and whether 'all' was used."""
+    parts = [part for part in re.split(r"[,;\s]+", (text or "").strip().lower()) if part]
+    if not parts:
+        parts = ["kernelsu"]
+    if "all" in parts:
+        return list(MANAGERS), True
+    managers: list[str] = []
+    for part in parts:
+        key = canonical_manager(part)
+        if key not in managers:
+            managers.append(key)
+    return managers, False
+
+
 def resolve_manager(name: str, susfs: bool, manager_ref: str) -> dict[str, str]:
-    if name not in MANAGERS:
-        die(f"Unknown manager '{name}'. Known: {', '.join(MANAGERS)} or all")
+    name = canonical_manager(name)
     entry = MANAGERS[name]
     if name == "none":
         return {
@@ -545,20 +572,21 @@ def emit_matrix(args: argparse.Namespace) -> None:
     else:
         selected_entries = [source_entry(args.kernel_source, args)]
         sources = [args.kernel_source]
-    managers = list(MANAGERS) if args.manager == "all" else [args.manager]
-    if args.manager != "all" and args.manager not in MANAGERS:
-        die(f"Unknown manager '{args.manager}'. Known: {', '.join(MANAGERS)} or all")
+    managers, picked_all = parse_managers(args.manager)
     if getattr(args, "build_scope", "image-only") == "image-menu":
         # The menu ZIP needs a manager to patch in, so the "none" entry has nothing to build.
-        if args.manager == "none":
+        if managers == ["none"]:
             die("build_scope=image-menu needs a root manager. Pick one or use manager=all.")
-        managers = [manager for manager in managers if manager != "none"]
+        if "none" in managers:
+            if not picked_all:
+                print("::warning::Leaving 'none' out of the matrix: build_scope=image-menu needs a root manager", file=sys.stderr)
+            managers.remove("none")
     if truthy(getattr(args, "susfs", "true")):
         for manager in list(managers):
             reason = MANAGERS[manager].get("susfs_blocked")
             if not reason:
                 continue
-            if args.manager != "all":
+            if not picked_all:
                 die(f"{MANAGERS[manager]['display']} cannot be built with SUSFS: {reason}")
             print(f"::warning::Skipping {MANAGERS[manager]['display']} in this matrix: {reason}", file=sys.stderr)
             managers.remove(manager)
