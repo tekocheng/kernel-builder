@@ -34,7 +34,7 @@ on:
         type: boolean
         default: false
       build_kowsu:
-        description: "KOWSU (disable SUSFS for this manager)"
+        description: "KOWSU (requires SUSFS disabled)"
         type: boolean
         default: false
       build_bakasu:
