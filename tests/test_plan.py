@@ -114,49 +114,12 @@ class PlanResolutionTests(unittest.TestCase):
             self.assertIn("ENABLE_SUSFS=true", text)
 
     def test_android_toolchain_is_the_official_google_git_checkout(self) -> None:
-        name, entry = plan.resolve_toolchain("android-r596125", "", "", {})
+        name, entry = plan.resolve_toolchain("android-r596125", {})
         self.assertEqual(name, "android-r596125")
         self.assertEqual(entry["git"], "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86")
         self.assertEqual(entry["branch"], "main-kernel")
         self.assertEqual(entry["dir"], "clang-r596125")
         self.assertNotIn("url", entry)
-
-    def test_git_toolchain_rejects_an_archive_checksum(self) -> None:
-        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
-            plan.resolve_toolchain("android-r596125", "", "a" * 64, {})
-
-    def test_git_toolchain_picked_by_a_source_ignores_a_shared_checksum(self) -> None:
-        stderr = io.StringIO()
-        with contextlib.redirect_stderr(stderr):
-            name, entry = plan.resolve_toolchain("auto", "", "a" * 64, {"toolchain": "android-r596125"})
-        self.assertEqual(name, "android-r596125")
-        self.assertNotIn("sha256", entry)
-        self.assertIn("ignored for the git toolchain", stderr.getvalue())
-
-    def test_toolchain_url_still_wins_over_a_git_toolchain(self) -> None:
-        name, entry = plan.resolve_toolchain("android-r596125", "https://example.invalid/clang.tar.xz", "", {})
-        self.assertTrue(name.startswith("custom-"))
-        self.assertEqual(entry["url"], "https://example.invalid/clang.tar.xz")
-        self.assertNotIn("git", entry)
-
-    def test_toolchain_custom_url_hash_and_sha(self) -> None:
-        name, entry = plan.resolve_toolchain(
-            "auto",
-            "https://example.invalid/clang.tar.xz",
-            "a" * 64,
-            {"toolchain": "llvm-slim-23.1.6"},
-        )
-        self.assertTrue(name.startswith("custom-"))
-        self.assertEqual(entry["sha256"], "a" * 64)
-
-    def test_invalid_toolchain_sha_is_rejected(self) -> None:
-        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
-            plan.resolve_toolchain("auto", "https://example.invalid/clang.tar.xz", "bad", {})
-
-    def test_toolchain_url_requires_valid_https_host(self) -> None:
-        for url in ("https:///missing-host.tar.xz", "http://example.invalid/clang.tar.xz", "https://user:pass@example.invalid/clang.tar.xz", "https://example.invalid:bad/clang.tar.xz"):
-            with self.subTest(url=url), contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
-                plan.resolve_toolchain("auto", url, "", {})
 
     def test_path_traversal_is_rejected(self) -> None:
         with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
@@ -260,8 +223,6 @@ class MatrixTests(unittest.TestCase):
             manager="all",
             manager_ref="",
             toolchain="auto",
-            toolchain_url="",
-            toolchain_sha256="",
             device="marble",
             source_ref="",
             github_output="",
@@ -280,8 +241,6 @@ class MatrixTests(unittest.TestCase):
             manager="all",
             manager_ref="",
             toolchain="auto",
-            toolchain_url="",
-            toolchain_sha256="",
             device="marble",
             source_ref="",
             github_output="",
@@ -340,40 +299,6 @@ class MatrixTests(unittest.TestCase):
                 plan.emit_matrix(self.matrix_args(build_scope=scope))
             managers = [row["manager"] for row in json.loads(output.getvalue())["include"]]
             self.assertIn("none", managers, scope)
-
-    def test_warns_when_one_checksum_covers_different_auto_toolchains(self) -> None:
-        args = SimpleNamespace(
-            all_sources="true",
-            kernel_source="aospa",
-            manager="kernelsu",
-            manager_ref="",
-            toolchain="auto",
-            toolchain_url="",
-            toolchain_sha256="a" * 64,
-            device="marble",
-            source_ref="",
-            github_output="",
-        )
-        stderr = io.StringIO()
-        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(stderr):
-            plan.emit_matrix(args)
-        self.assertIn("toolchain_sha256 is shared", stderr.getvalue())
-
-    def test_matrix_rejects_invalid_toolchain_checksum_before_scheduling(self) -> None:
-        args = SimpleNamespace(
-            all_sources="false",
-            kernel_source="aospa",
-            manager="kernelsu",
-            manager_ref="",
-            toolchain="auto",
-            toolchain_url="",
-            toolchain_sha256="not-a-sha256",
-            device="marble",
-            source_ref="",
-            github_output="",
-        )
-        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
-            plan.emit_matrix(args)
 
 
 if __name__ == "__main__":

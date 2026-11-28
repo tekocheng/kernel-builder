@@ -41,10 +41,22 @@ on:
         description: "Enable SUSFS"
         type: boolean
         default: true
+      susfs_branch:
+        description: "SUSFS branch. Empty uses the default (gki-android12-5.10)."
+        type: string
+        default: ""
+      susfs_ref:
+        description: "SUSFS commit or tag to pin. Empty uses the tip of the branch."
+        type: string
+        default: ""
       enable_nomount:
         description: "Include NoMount in kernel image"
         type: boolean
         default: false
+      nomount_ref:
+        description: "NoMount branch, tag, or commit. Empty uses the default (dev)."
+        type: string
+        default: ""
       toolchain:
         description: "Compiler toolchain"
         type: choice
@@ -95,9 +107,11 @@ jobs:
       build_bakasu: ${{ inputs.build_bakasu }}
       manager_ref: ""
       enable_susfs: ${{ inputs.enable_susfs }}
+      susfs_branch: ${{ inputs.susfs_branch }}
+      susfs_ref: ${{ inputs.susfs_ref }}
       enable_nomount: ${{ inputs.enable_nomount }}
+      nomount_ref: ${{ inputs.nomount_ref }}
       toolchain: ${{ inputs.toolchain }}
-      advanced_overrides: "{}"
       lto: ${{ inputs.lto }}
       build_scope: ${{ inputs.build_scope }}
       ccache: true

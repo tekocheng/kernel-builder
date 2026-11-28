@@ -8,7 +8,6 @@ config/devices/<name>.env. This file does not need a workflow edit.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import re
 import shlex
@@ -200,42 +199,15 @@ def resolve_manager(name: str, susfs: bool, manager_ref: str) -> dict[str, str]:
     }
 
 
-def resolve_toolchain(name: str, url: str, sha256: str, source: dict) -> tuple[str, dict]:
-    """Return (toolchain name, entry). A URL input wins over the name."""
-    url = require_single_line(url.strip(), "toolchain_url")
-    sha256 = require_single_line(sha256.strip().lower(), "toolchain_sha256")
-    if sha256 and not re.fullmatch(r"[0-9a-f]{64}", sha256):
-        die("toolchain_sha256 must be exactly 64 hexadecimal characters")
-    if url:
-        try:
-            parsed_url = urllib.parse.urlsplit(url)
-            # Accessing .port also validates malformed port values.
-            _ = parsed_url.port
-        except ValueError as exc:
-            die(f"Invalid toolchain_url: {exc}")
-        if parsed_url.scheme != "https" or not parsed_url.hostname:
-            die("toolchain_url must be a valid HTTPS URL with a hostname")
-        if parsed_url.username or parsed_url.password:
-            die("toolchain_url must not embed username/password credentials; use an approved download URL")
-        if any(char.isspace() for char in url):
-            die("toolchain_url must not contain whitespace")
-        return "custom-" + hashlib.sha1(url.encode()).hexdigest()[:8], {"url": url, "sha256": sha256}
+def resolve_toolchain(name: str, source: dict) -> tuple[str, dict]:
+    """Return (toolchain name, entry). auto uses the source preset, then the default in config/toolchains.json."""
     name = name.strip() or "auto"
-    chosen_by_user = name != "auto"
     if name == "auto":
         defaults = [key for key, value in TOOLCHAINS.items() if value.get("default")]
         name = source.get("toolchain") or (defaults[0] if defaults else "")
     if name not in TOOLCHAINS:
         die(f"Unknown toolchain '{name}'. Known: auto, {', '.join(TOOLCHAINS)}. Add it to config/toolchains.json")
-    entry = dict(TOOLCHAINS[name])
-    if sha256 and entry.get("git"):
-        # A git checkout has no archive to hash. Refuse when the user picked it, ignore when a source picked it.
-        if chosen_by_user:
-            die(f"toolchain_sha256 does not apply to the git toolchain '{name}'. Leave it empty or use toolchain_url.")
-        print(f"::warning::toolchain_sha256 is ignored for the git toolchain '{name}'", file=sys.stderr)
-    elif sha256:
-        entry["sha256"] = sha256
-    return name, entry
+    return name, dict(TOOLCHAINS[name])
 
 
 def fragments_for(entry: dict, device: dict[str, str]) -> str:
@@ -258,7 +230,7 @@ def write_plan(args: argparse.Namespace) -> None:
     resolved = [resolve_manager(name, susfs, args.manager_ref) for name in managers]
     manager = resolved[0]
     mode = entry.get("defconfig_mode", "auto")
-    toolchain, toolchain_entry = resolve_toolchain(args.toolchain, args.toolchain_url, args.toolchain_sha256, entry)
+    toolchain, toolchain_entry = resolve_toolchain(args.toolchain, entry)
     if args.lto not in {"none", "thin", "full"}:
         die("lto must be none, thin, or full")
     if args.build_scope not in {"image-only", "full", "image-menu"}:
@@ -559,17 +531,11 @@ def emit_matrix(args: argparse.Namespace) -> None:
     load_device(args.device)
     # Validate common build options once, before any matrix jobs are scheduled.
     for entry in selected_entries:
-        resolve_toolchain(args.toolchain, args.toolchain_url, args.toolchain_sha256, entry)
+        resolve_toolchain(args.toolchain, entry)
     if len(sources) > 1 and args.source_ref.strip():
         print("::warning::source_ref is shared by every source in this matrix; verify that the ref exists in each selected source", file=sys.stderr)
     if len(managers) > 1 and args.manager_ref.strip():
         print("::warning::manager_ref is shared by every manager in this matrix; verify that the ref exists in each selected manager", file=sys.stderr)
-    if len(sources) > 1 and args.toolchain_sha256.strip() and not args.toolchain_url.strip() and args.toolchain.strip() == "auto":
-        defaults = [key for key, value in TOOLCHAINS.items() if value.get("default")]
-        global_default = defaults[0] if defaults else ""
-        selected = {entry.get("toolchain") or global_default for entry in selected_entries}
-        if len(selected) > 1:
-            print("::warning::toolchain_sha256 is shared by all source builds while toolchain=auto selects different source-specific compilers; use one toolchain_url/fixed toolchain or leave the shared checksum empty", file=sys.stderr)
     if getattr(args, "build_scope", "image-only") == "image-menu":
         # One runner builds every manager of a source and ships them in a single menu ZIP.
         include = [{"source": source, "manager": ",".join(managers)} for source in sources]
@@ -609,8 +575,6 @@ def build_parser() -> argparse.ArgumentParser:
     plan.add_argument("--nomount", default="false")
     plan.add_argument("--nomount-ref", default="")
     plan.add_argument("--toolchain", default="auto")
-    plan.add_argument("--toolchain-url", default="")
-    plan.add_argument("--toolchain-sha256", default="")
     plan.add_argument("--lto", default="thin")
     plan.add_argument("--build-scope", default="image-only")
     plan.add_argument("--ccache", default="true")
@@ -634,8 +598,6 @@ def build_parser() -> argparse.ArgumentParser:
     matrix.add_argument("--manager", default="kernelsu")
     matrix.add_argument("--manager-ref", default="")
     matrix.add_argument("--toolchain", default="auto")
-    matrix.add_argument("--toolchain-url", default="")
-    matrix.add_argument("--toolchain-sha256", default="")
     matrix.add_argument("--all-sources", default="false")
     matrix.add_argument("--build-scope", default="image-only")
     matrix.add_argument("--github-output", default="")

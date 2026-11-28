@@ -53,8 +53,6 @@ if [[ -n "${GITHUB_OUTPUT:-}" && "${MATRIX_ONLY:-}" == "1" ]]; then
     --manager "${MANAGER}" \
     --manager-ref "${MANAGER_REF}" \
     --toolchain "${TOOLCHAIN}" \
-    --toolchain-url "${TOOLCHAIN_URL}" \
-    --toolchain-sha256 "${TOOLCHAIN_SHA256}" \
     --all-sources "${ALL_SOURCES}" \
     --build-scope "${BUILD_SCOPE}" \
     --github-output "${GITHUB_OUTPUT}"
@@ -78,8 +76,6 @@ python3 "${ROOT}/scripts/plan.py" write-plan \
   --nomount "${ENABLE_NOMOUNT}" \
   --nomount-ref "${NOMOUNT_REF}" \
   --toolchain "${TOOLCHAIN}" \
-  --toolchain-url "${TOOLCHAIN_URL}" \
-  --toolchain-sha256 "${TOOLCHAIN_SHA256}" \
   --lto "${LTO}" \
   --build-scope "${BUILD_SCOPE}" \
   --ccache "${USE_CCACHE}" \

@@ -35,7 +35,7 @@ Runner disk cleanup and swap setup are implemented in the reusable composite act
 
 ### Advanced workflow
 
-Use `Build Kernel Advanced` for `kernel_name`, `all_sources`, source and manager refs, and the `advanced_overrides` JSON field. The advanced workflow retains the full set of controls while sharing the same build implementation as the simple workflow.
+Use `Build Kernel Advanced` for `kernel_name`, `all_sources`, and source and manager refs. The advanced workflow retains the full set of controls while sharing the same build implementation as the simple workflow.
 
 ### Recommended first build
 
@@ -58,7 +58,9 @@ The values below match the inputs declared in `.github/workflows/build-advanced.
 | `build_bakasu` | `false` (default) / `true` | Build BakaSU. Select at least one manager. |
 | `manager_ref` | Text / empty | Overrides the branch, tag, or commit for every selected manager. |
 | `enable_susfs` | `true` (default), `false` | Enables the SUSFS kernel and manager integration when the selected manager supports it. A build without a manager (`MANAGER=none` in a local `scripts/build.sh` run) never uses SUSFS. |
-| `advanced_overrides` | JSON object / `{}` | Optional overrides for `susfs_ref`, `susfs_branch`, `nomount_ref`, `toolchain_url`, and `toolchain_sha256`. Example: `{"susfs_branch":"gki-android12-5.10","nomount_ref":"dev"}`. Values must be strings. |
+| `susfs_branch` | Text / empty | SUSFS branch. Empty uses the device default (`SUSFS_BRANCH` in `config/devices/<name>.env`). |
+| `susfs_ref` | Text / empty | SUSFS commit or tag to pin. Empty uses the tip of the branch. |
+| `nomount_ref` | Text / empty | NoMount branch, tag, or commit. Empty uses the device default (`NOMOUNT_REF`). |
 | `lto` | `thin` (default), `none`, `full` | Selects the kernel LTO configuration. See [LTO](#lto). |
 | `build_scope` | `image-menu` (default), `image-only`, `full` | `image-menu` builds every selected manager in one job per source and packages stock plus the built variants as one [Patch-menu ZIP](#patch-menu-zip). `image-only` builds one flashable kernel image per manager. `full` also builds in-tree modules and DTBs, and builds the configured external SM8450 techpack modules where the source provides a techpack list. |
 | `ccache` | `true` (default), `false` | Enables compiler caching. The workflow also caches toolchain files, ccache data, and the ThinLTO cache between runs. |
@@ -119,9 +121,9 @@ Toolchain definitions live in [`config/toolchains.json`](config/toolchains.json)
 | `llvm-slim-23.1.6` | [kernel.org slim LLVM](https://mirrors.edge.kernel.org/pub/tools/llvm/) | Slim LLVM 23.1.6 (`llvm-23.1.6-x86_64.tar.xz`); `max_jobs=2`. Not a global default. Used automatically for the `bouquet` source, matching the upstream `bouquet_ci` workflow. |
 | `alchemist-llvm-23` | [nekoshirro/Alchemist-LLVM](https://github.com/nekoshirro/Alchemist-LLVM) | Alchemist LLVM 23 (clang 23.0.1), release `lto-20261105`, pinned by SHA-256; `max_jobs=2`. Not a default. |
 
-A toolchain entry is either an archive (`url`) or a git directory (`git`, `branch`, `dir`). For a git entry the builder runs a shallow, filtered clone of the branch and checks out only `dir`, then records the commit in `toolchain-commit.txt` and in `build-manifest.json`. The first run downloads the whole clang directory, which is large; later runs reuse the Actions cache. `toolchain_sha256` is rejected for git entries, because a git checkout has no archive to hash.
+A toolchain entry is either an archive (`url`) or a git directory (`git`, `branch`, `dir`). For a git entry the builder runs a shallow, filtered clone of the branch and checks out only `dir`, then records the commit in `toolchain-commit.txt` and in `build-manifest.json`. The first run downloads the whole clang directory, which is large; later runs reuse the Actions cache. A git checkout has no archive to hash, so `sha256` applies to archive entries only.
 
-For an archive entry, the builder downloads and safely extracts the selected archive, locates `bin/clang`, and adds that toolchain's `bin` directory to `PATH`. Archive paths and links are checked before extraction. The workflow caches the `toolchains/` directory using a cache identity that includes the toolchain URL and expected checksum. A `toolchain_url` override takes precedence over the named toolchain and is stored in a URL-derived toolchain directory. Supply `toolchain_sha256` when a trusted checksum is available; a cached archive is reused only when its recorded checksum matches the expected value.
+For an archive entry, the builder downloads and safely extracts the selected archive, locates `bin/clang`, and adds that toolchain's `bin` directory to `PATH`. Archive paths and links are checked before extraction. The workflow caches the `toolchains/` directory, and the cache key includes `config/toolchains.json`, so changing an entry refreshes it. When an entry has a `sha256`, a cached archive is reused only when its recorded checksum matches.
 
 ## LTO
 
@@ -241,7 +243,7 @@ The ZIP filename does not include the custom `kernel_name`; the selected name is
 
 Most presets use branch names, which can move as upstream repositories are updated. For a repeatable build, record the selected commits and prefer full commit SHAs for `source_ref`, `manager_ref`, `susfs_ref`, and `nomount_ref` instead of relying on moving branches. Also pin `ANYKERNEL_REF` in the device file if the packaging template must remain fixed.
 
-`build-manifest.json` records resolved commits for the kernel and each manifest/extra project. It also records the manager repository and requested ref, the manager commit when the setup script leaves a Git checkout, plus the actual compiler archive SHA-256 and toolchain version. For strongest repeatability, provide full commit SHAs for source/manager/SUSFS/NoMount refs and a trusted `toolchain_sha256`. A checksum generated by the builder is useful for later comparison, but is not a substitute for checking it against a trusted upstream checksum on the first download.
+`build-manifest.json` records resolved commits for the kernel and each manifest/extra project. It also records the manager repository and requested ref, the manager commit when the setup script leaves a Git checkout, plus the actual compiler archive SHA-256 and toolchain version. For strongest repeatability, provide full commit SHAs for source/manager/SUSFS/NoMount refs and a toolchain entry that has a `sha256`. A checksum generated by the builder is useful for later comparison, but is not a substitute for checking it against a trusted upstream checksum on the first download.
 
 ## Add a kernel source
 
@@ -337,8 +339,6 @@ There is no generic LKM build recipe or `lkm` manager flag in the current builde
 
 ## Add or update a toolchain
 
-For a one-run override, paste an HTTPS URL to a `.tar.gz` or `.tar.xz` compiler archive into `toolchain_url`. The archive must contain `bin/clang` where the builder can locate it.
-
 To add a reusable named toolchain, add an entry to [`config/toolchains.json`](config/toolchains.json) and add its key to the `toolchain` options in `.github/workflows/build.yml` and `.github/workflows/build-advanced.yml` (the simple menu only lists supported named toolchains):
 
 ```json
@@ -380,9 +380,9 @@ Change the environment variables to test another source or manager. The script s
 | `SUSFS ... patch does not apply` | The kernel or manager tree may not match the selected SUSFS branch. Pin compatible source/manager refs or choose a compatible device SUSFS branch. |
 | `CONFIG_NOMOUNT=y did not stay enabled` | The kernel tree did not retain NoMount's Kconfig option after `olddefconfig`. Check the NoMount setup integration and kernel compatibility. |
 | `The runner has received a shutdown signal` during full LTO | The linker may have run out of memory. Use `lto=thin`; the builder also falls back to thin when detected RAM plus swap is below its threshold. |
-| `curl: (22)` while fetching a toolchain | The download URL may have moved or become unavailable. Update `config/toolchains.json` or use `toolchain_url` for a one-off run. |
+| `curl: (22)` while fetching a toolchain | The download URL may have moved or become unavailable. Update `config/toolchains.json`. |
 | `No bin/clang inside ...` | The archive is not a supported Clang package, or `bin/clang` is outside the search depth. |
-| `Toolchain SHA-256 mismatch` | The downloaded archive does not match `toolchain_sha256`. Verify the URL and checksum before retrying. |
+| `Toolchain SHA-256 mismatch` | The downloaded archive does not match the `sha256` of the entry in `config/toolchains.json`. Verify the URL and checksum before retrying. |
 | `Manifest include not found` / include cycle | Check the include path relative to the manifest checkout and remove circular includes. |
 | `Unsupported manifest <submanifest>` | Flatten or adapt the manifest; nested submanifest checkouts are not currently implemented. |
 | `Path escapes checkout root` | A configured source path, project path, or extra repository destination attempts to write outside its checkout. Correct the path in the source/device configuration. |

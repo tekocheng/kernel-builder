@@ -198,7 +198,8 @@ def validate() -> list[str]:
 
     required_inputs = {
         "kernel_name", "all_sources", "source_ref",
-        "manager_ref", "enable_susfs", "enable_nomount", "advanced_overrides",
+        "manager_ref", "enable_susfs", "enable_nomount",
+        "susfs_branch", "susfs_ref", "nomount_ref",
         "lto", "build_scope", "ccache", "uname_hash", "uname_run_id", "draft_release",
     }
     for input_name in sorted(required_inputs):

@@ -71,10 +71,18 @@ on:
           - llvm-23.1.6
           - llvm-slim-23.1.6
           - alchemist-llvm-23
-      advanced_overrides:
-        description: 'Optional JSON overrides: susfs_ref, susfs_branch, nomount_ref, toolchain_url, toolchain_sha256. Example: {"susfs_branch":"gki-android12-5.10"}'
+      susfs_branch:
+        description: "SUSFS branch. Empty uses the device default (gki-android12-5.10)."
         type: string
-        default: "{}"
+        default: ""
+      susfs_ref:
+        description: "SUSFS commit or tag to pin. Empty uses the tip of the branch."
+        type: string
+        default: ""
+      nomount_ref:
+        description: "NoMount branch, tag, or commit. Empty uses the device default (dev)."
+        type: string
+        default: ""
       lto:
         description: "thin is the safe default. full needs about 30 GB of RAM plus swap and is slow on hosted runners."
         type: choice
@@ -162,10 +170,18 @@ on:
         required: false
         type: string
         default: "auto"
-      advanced_overrides:
+      susfs_branch:
         required: false
         type: string
-        default: "{}"
+        default: ""
+      susfs_ref:
+        required: false
+        type: string
+        default: ""
+      nomount_ref:
+        required: false
+        type: string
+        default: ""
       lto:
         required: false
         type: string
@@ -214,16 +230,14 @@ jobs:
           python3 -m unittest discover -s tests -v
           bash -n scripts/build.sh
 
-      - name: Normalize manager selections and advanced overrides
+      - name: Normalize manager selections
         env:
           BUILD_KERNELSU: ${{ inputs.build_kernelsu }}
           BUILD_KERNELSU_NEXT: ${{ inputs.build_kernelsu_next }}
           BUILD_SUKISU_NOVA: ${{ inputs.build_sukisu_nova }}
           BUILD_BAKASU: ${{ inputs.build_bakasu }}
-          ADVANCED_OVERRIDES: ${{ inputs.advanced_overrides }}
         run: |
           python3 - <<'PY'
-          import json
           import os
           from pathlib import Path
 
@@ -237,28 +251,7 @@ jobs:
           if not selected:
               raise SystemExit("::error::Select at least one KernelSU manager checkbox.")
 
-          raw = os.environ.get("ADVANCED_OVERRIDES", "").strip() or "{}"
-          try:
-              overrides = json.loads(raw)
-          except json.JSONDecodeError as exc:
-              raise SystemExit(f"::error::advanced_overrides is not valid JSON: {exc}")
-          allowed = {"susfs_ref", "susfs_branch", "nomount_ref", "toolchain_url", "toolchain_sha256"}
-          if not isinstance(overrides, dict):
-              raise SystemExit("::error::advanced_overrides must be a JSON object.")
-          unknown = sorted(set(overrides) - allowed)
-          if unknown:
-              raise SystemExit("::error::Unsupported advanced_overrides keys: " + ", ".join(unknown))
-
           lines = ["MANAGER=" + ",".join(selected)]
-          for key in sorted(allowed):
-              value = overrides.get(key, "")
-              if value is None:
-                  value = ""
-              if not isinstance(value, str):
-                  raise SystemExit(f"::error::{key} must be a string.")
-              if any(ch in value for ch in ("\x00", "\n", "\r")):
-                  raise SystemExit(f"::error::{key} must be a single-line string.")
-              lines.append(key.upper() + "=" + value)
           with Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8") as env_file:
               env_file.write("\n".join(lines) + "\n")
           print("Selected managers: " + ", ".join(selected))
@@ -297,13 +290,6 @@ jobs:
           build_scope: ${{ inputs.build_scope }}
           config: config/runner.json
 
-      - name: Prepare toolchain cache identity
-        env:
-          TOOLCHAIN_URL: ${{ fromJSON(inputs.advanced_overrides || '{}').toolchain_url || '' }}
-          TOOLCHAIN_SHA256: ${{ fromJSON(inputs.advanced_overrides || '{}').toolchain_sha256 || '' }}
-        run: |
-          printf '%s\n%s\n' "$TOOLCHAIN_URL" "$TOOLCHAIN_SHA256" > .toolchain-cache-key
-
       - name: Restore toolchain and ccache
         uses: actions/cache@v6
         with:
@@ -311,7 +297,7 @@ jobs:
             toolchains
             /home/runner/.ccache
             /home/runner/.cache/thinlto
-          key: kernel-tools-v2-${{ runner.os }}-${{ inputs.toolchain }}-${{ hashFiles('.toolchain-cache-key', 'scripts/build.sh', 'scripts/plan.py', 'scripts/safe_extract.py', 'config/sources.json', 'config/toolchains.json') }}
+          key: kernel-tools-v2-${{ runner.os }}-${{ inputs.toolchain }}-${{ hashFiles('scripts/build.sh', 'scripts/plan.py', 'scripts/safe_extract.py', 'config/sources.json', 'config/toolchains.json') }}
           restore-keys: |
             kernel-tools-v2-${{ runner.os }}-${{ inputs.toolchain }}-
             kernel-tools-v2-${{ runner.os }}-
@@ -325,13 +311,11 @@ jobs:
           MANAGER: ${{ matrix.manager }}
           MANAGER_REF: ${{ inputs.manager_ref }}
           ENABLE_SUSFS: ${{ inputs.enable_susfs }}
-          SUSFS_REF: ${{ fromJSON(inputs.advanced_overrides || '{}').susfs_ref || '' }}
-          SUSFS_BRANCH: ${{ fromJSON(inputs.advanced_overrides || '{}').susfs_branch || '' }}
+          SUSFS_REF: ${{ inputs.susfs_ref }}
+          SUSFS_BRANCH: ${{ inputs.susfs_branch }}
           ENABLE_NOMOUNT: ${{ inputs.enable_nomount }}
-          NOMOUNT_REF: ${{ fromJSON(inputs.advanced_overrides || '{}').nomount_ref || '' }}
+          NOMOUNT_REF: ${{ inputs.nomount_ref }}
           TOOLCHAIN: ${{ inputs.toolchain }}
-          TOOLCHAIN_URL: ${{ fromJSON(inputs.advanced_overrides || '{}').toolchain_url || '' }}
-          TOOLCHAIN_SHA256: ${{ fromJSON(inputs.advanced_overrides || '{}').toolchain_sha256 || '' }}
           LTO: ${{ inputs.lto }}
           BUILD_SCOPE: ${{ inputs.build_scope }}
           USE_CCACHE: ${{ inputs.ccache }}
