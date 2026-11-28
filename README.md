@@ -31,7 +31,7 @@ Runner disk cleanup and swap setup are implemented in the reusable composite act
 
 ### Recommended first build
 
-The workflow defaults to a combined AK3 manager menu for one source: `kernel_source=aospa`, `manager=kernelsu`, `enable_susfs=true`, `enable_nomount=false`, `toolchain=auto`, `lto=thin`, `build_scope=image-menu`, and `ccache=true`. The ZIP contains the stock kernel plus only the manager variants named in `manager` that the plan allows and the build successfully produces. To include several choices in the installer, enter a comma-separated list such as `kernelsu,kernelsu-next,sukisu-nova`; do not use `all` unless you really want every compatible manager built. With SUSFS enabled, managers marked incompatible with SUSFS (currently KOWSU) are excluded; set `enable_susfs=false` to include those managers without SUSFS. Leave `source_ref` and `manager_ref` empty to use the configured presets. Select a source that matches the ROM/kernel base on the target device.
+The workflow defaults to a combined AK3 manager menu for one source: `kernel_source=aospa`, official KernelSU selected, `enable_susfs=true`, `enable_nomount=false`, `toolchain=auto`, `lto=thin`, `build_scope=image-menu`, and `ccache=true`. In the Run workflow form, tick one or more manager checkboxes: `build_kernelsu`, `build_kernelsu_next`, `build_sukisu_nova`, `build_kowsu`, and `build_bakasu`. At least one must be selected. The ZIP contains the stock kernel plus the selected variants that the plan allows and the build successfully produces. With SUSFS enabled, KOWSU is rejected because its SUSFS patch is incompatible; set `enable_susfs=false` to build KOWSU without SUSFS. Leave `source_ref` and `manager_ref` empty to use configured presets. Advanced one-run overrides (`susfs_ref`, `susfs_branch`, `nomount_ref`, `toolchain_url`, and `toolchain_sha256`) are supplied as a JSON object in `advanced_overrides`. Select a source that matches the ROM/kernel base on the target device.
 
 ## Workflow inputs
 
@@ -48,16 +48,14 @@ The values below match the inputs declared in `.github/workflows/build.yml`.
 | `custom_ref` | Text / empty | Required for a custom source unless `source_ref` is supplied. For Git, this is the kernel repository ref; for a manifest, it is the manifest repository ref. |
 | `custom_fetch` | `git` (default), `manifest` | Selects how the custom source is fetched. |
 | `custom_kernel_path` | Text / empty | Optional path to the kernel tree inside the fetched repository/manifest. Defaults to `.` for Git and `kernel_platform/xiaomi/sm8450` for a custom manifest. |
-| `manager` | Text, default `kernelsu` | One or more managers separated by commas or spaces, for example `kernelsu,kernelsu-next,sukisu-nova`, or `all`. Names: `none`, `kernelsu`, `kernelsu-next`, `sukisu-nova`, `bakasu`, `kowsu`. Short names work too: `ksu`, `ksunext` (or `next`), `sukisu` (or `suki`, `nova`), `baka`, `kow`. With `build_scope=image-menu`, these are built in one job and included as selectable AK3 variants; in `image-only` or `full`, each manager becomes a separate build job. `all` selects every configured manager; avoid it for shorter builds unless you intentionally want all compatible variants. `none` is omitted from the menu ZIP because stock is already the fallback. GitHub has no multi-select input, so this is a text field; an unknown name stops the run in the Plan job and lists the valid names. |
-| `manager_ref` | Text / empty | Overrides the selected manager's branch, tag, or commit. If empty, the manager's configured ref is used (or its SUSFS-specific ref when applicable). |
+| `build_kernelsu` | `true` (default) / `false` | Build official KernelSU (tiann). |
+| `build_kernelsu_next` | `false` (default) / `true` | Build KernelSU-Next. |
+| `build_sukisu_nova` | `false` (default) / `true` | Build SukiSU Nova. |
+| `build_kowsu` | `false` (default) / `true` | Build KOWSU. With SUSFS enabled, this is rejected because the current fork-specific patch is incompatible. |
+| `build_bakasu` | `false` (default) / `true` | Build BakaSU. Select at least one manager. |
+| `manager_ref` | Text / empty | Overrides the branch, tag, or commit for every selected manager. |
 | `enable_susfs` | `true` (default), `false` | Enables the SUSFS kernel and manager integration when the selected manager supports it. `manager=none` disables SUSFS. |
-| `susfs_ref` | Text / empty | Optional SUSFS commit or tag. Empty uses the tip of the selected SUSFS branch. |
-| `susfs_branch` | Text / empty | SUSFS branch to fetch. Empty uses the device default; for `marble`, `gki-android12-5.10`. |
-| `enable_nomount` | `false` (default), `true` | Integrates NoMount into the kernel. This is a built-in kernel option, not a separate module build. |
-| `nomount_ref` | Text / empty | NoMount branch or tag. Empty uses the device default; for `marble`, `dev`. |
-| `toolchain` | `auto` (default), `android-r596125`, `llvm-23.1.6`, `llvm-slim-23.1.6`, `alchemist-llvm-23` | Selects a toolchain from `config/toolchains.json`. `auto` prefers the source's configured toolchain, then the global default. |
-| `toolchain_url` | HTTPS URL / empty | Optional direct link to a `.tar.gz` or `.tar.xz` compiler archive. When supplied, it overrides `toolchain` for that run. The archive must contain `bin/clang` at its root or within the supported directory depth. The URL must be HTTPS; embedded username/password credentials are rejected. The workflow log and build metadata do not expose URL credentials, query strings, or fragments. The uploaded `plan.env` is sanitized by an exit trap, including when a later build step fails. |
-| `toolchain_sha256` | 64-character SHA-256 / empty | Optional expected checksum for the selected archive. It does not apply to the git toolchain `android-r596125`: choosing that toolchain yourself with a checksum stops with an error, while a checksum shared across `all_sources` is ignored for it with a warning. A mismatch stops the build before extraction. When omitted, the builder still records the downloaded archive's actual checksum but cannot verify it against a trusted expected value. |
+| `advanced_overrides` | JSON object / `{}` | Optional overrides for `susfs_ref`, `susfs_branch`, `nomount_ref`, `toolchain_url`, and `toolchain_sha256`. Example: `{"susfs_branch":"gki-android12-5.10","nomount_ref":"dev"}`. Values must be strings. |
 | `lto` | `thin` (default), `none`, `full` | Selects the kernel LTO configuration. See [LTO](#lto). |
 | `build_scope` | `image-menu` (default), `image-only`, `full` | `image-menu` builds every manager in the `manager` list in one job and packages stock plus the built variants as one [Patch-menu ZIP](#patch-menu-zip). `image-only` builds one flashable kernel image per manager. `full` also builds in-tree modules and DTBs, and builds the configured external SM8450 techpack modules where the source provides a techpack list. |
 | `ccache` | `true` (default), `false` | Enables compiler caching. The workflow also caches toolchain files, ccache data, and the ThinLTO cache between runs. |
@@ -67,7 +65,7 @@ The values below match the inputs declared in `.github/workflows/build.yml`.
 
 ### Build matrix behavior
 
-For `build_scope=image-only` and `full`, `all_sources` and `manager=all` expand into a matrix. If both are enabled, the workflow builds the Cartesian product of all configured sources and managers. There are currently seven sources and six manager entries (including `none`), so that combination schedules 42 build jobs, or 35 while `enable_susfs=true`, because KOWSU is skipped then.
+For `build_scope=image-only` and `full`, the selected manager checkboxes and `all_sources` expand into a matrix. If both are enabled, the workflow builds the Cartesian product of all configured sources and managers. There are currently seven sources and six manager entries (including `none`), so that combination schedules 42 build jobs, or 35 while `enable_susfs=true`, because KOWSU is skipped then.
 
 With `build_scope=image-menu`, the `none` manager is left out because the menu ZIP needs a manager to patch in, and `manager=none` stops with an error before any job starts. The matrix then has one job per source that carries the whole manager list (`manager=all` means every manager that can take SUSFS), instead of one job per manager.
 
@@ -327,7 +325,7 @@ For a custom Git source, `source_ref` takes precedence over `custom_ref` when bo
 
 ## Add a manager
 
-Add an entry to [`config/managers.json`](config/managers.json). The `manager` input is a text field, so the workflow needs no change; mention the new key in its description if you like. The resolver expects a `display`, `repo`, `ref`, and `setup` value. The setup script must create a Kconfig at one of the paths checked by `scripts/build.sh` (`KernelSU/kernel/Kconfig` or `KernelSU-Next/kernel/Kconfig`).
+Add an entry to [`config/managers.json`](config/managers.json). The workflow currently exposes five manager checkboxes. When adding a manager, add its checkbox to `.github/workflows/build.yml` and map it in the Plan job's normalization step; keep the total number of `workflow_dispatch` inputs at or below GitHub's limit of 25. The resolver expects a `display`, `repo`, `ref`, and `setup` value. The setup script must create a Kconfig at one of the paths checked by `scripts/build.sh` (`KernelSU/kernel/Kconfig` or `KernelSU-Next/kernel/Kconfig`).
 
 Optional manager fields:
 
