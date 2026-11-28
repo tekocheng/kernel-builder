@@ -140,32 +140,8 @@ def builtin_nomount(entry: dict) -> bool:
 
 
 def source_entry(key: str, args: argparse.Namespace) -> dict:
-    if key == "custom":
-        repo = validate_repo_target(args.custom_repo, "custom_repo") if args.custom_repo.strip() else ""
-        ref = require_single_line((args.source_ref or args.custom_ref).strip(), "custom_ref/source_ref")
-        if not repo or not ref:
-            die("custom source needs custom_repo and custom_ref (or source_ref)")
-        fetch = args.custom_fetch.strip() or "git"
-        if fetch not in {"git", "manifest"}:
-            die("custom_fetch must be git or manifest")
-        entry = {
-            "display": "Custom",
-            "rom": repo,
-            "fetch": fetch,
-            "defconfig_mode": "auto",
-            "kernel_path": safe_relative_path(args.custom_kernel_path, "custom_kernel_path", allow_dot=(fetch == "git")) if args.custom_kernel_path.strip() else ("." if fetch == "git" else "kernel_platform/xiaomi/sm8450"),
-            "manifest_skip": ["prebuilts/clang", "prebuilts-master", "gcc/linux-x86"],
-        }
-        if fetch == "git":
-            entry["repo"] = repo
-            entry["ref"] = ref
-        else:
-            entry["manifest_repo"] = repo
-            entry["manifest_ref"] = ref
-            entry["manifest_file"] = "default.xml"
-        return entry
     if key not in SOURCES:
-        die(f"Unknown kernel source '{key}'. Known: {', '.join(SOURCES)} or custom")
+        die(f"Unknown kernel source '{key}'. Known: {', '.join(SOURCES)}")
     return SOURCES[key]
 
 
@@ -297,7 +273,7 @@ def write_plan(args: argparse.Namespace) -> None:
         die(f"Unsupported fetch method '{fetch}' for {args.kernel_source}")
 
     kernel_ref = entry.get("ref", "")
-    if fetch == "git" and args.source_ref.strip() and args.kernel_source != "custom":
+    if fetch == "git" and args.source_ref.strip():
         kernel_ref = args.source_ref.strip()
     kernel_ref = require_single_line(kernel_ref, "kernel_ref")
     kernel_name = require_single_line(args.kernel_name.strip() or device.get("KERNEL_NAME", ""), "kernel_name")
@@ -349,8 +325,6 @@ def write_plan(args: argparse.Namespace) -> None:
         "KBUILD_BUILD_HOST": device.get("KBUILD_BUILD_HOST", "github-actions"),
         "USE_CCACHE": "true" if truthy(args.ccache) else "false",
     }
-    if fetch == "manifest" and args.source_ref.strip() and args.kernel_source == "custom":
-        values["MANIFEST_REF"] = args.source_ref.strip()
     values.update(manager)
     values["MANAGER_LIST"] = " ".join(managers)
     values["SUSFS_REQUESTED"] = "true" if susfs else "false"
@@ -568,8 +542,6 @@ def parse_manifest(xml_path: Path, skip: list[str], kernel_path: str, kernel_ref
 
 def emit_matrix(args: argparse.Namespace) -> None:
     if truthy(args.all_sources):
-        if args.kernel_source == "custom":
-            die("all_sources cannot be combined with a custom repo. Add the source to config/sources.json first.")
         sources = list(SOURCES)
         selected_entries = [SOURCES[source] for source in sources]
     else:
@@ -629,10 +601,6 @@ def build_parser() -> argparse.ArgumentParser:
     plan.add_argument("--kernel-name", default="")
     plan.add_argument("--kernel-source", default="aosp")
     plan.add_argument("--source-ref", default="")
-    plan.add_argument("--custom-repo", default="")
-    plan.add_argument("--custom-ref", default="")
-    plan.add_argument("--custom-fetch", default="git")
-    plan.add_argument("--custom-kernel-path", default="")
     plan.add_argument("--manager", default="kernelsu")
     plan.add_argument("--manager-ref", default="")
     plan.add_argument("--susfs", default="true")
@@ -662,10 +630,7 @@ def build_parser() -> argparse.ArgumentParser:
     matrix = sub.add_parser("matrix")
     matrix.add_argument("--device", default="marble")
     matrix.add_argument("--kernel-source", default="aosp")
-    matrix.add_argument("--custom-repo", default="")
-    matrix.add_argument("--custom-ref", default="")
     matrix.add_argument("--source-ref", default="")
-    matrix.add_argument("--custom-fetch", default="git")
     matrix.add_argument("--manager", default="kernelsu")
     matrix.add_argument("--manager-ref", default="")
     matrix.add_argument("--toolchain", default="auto")

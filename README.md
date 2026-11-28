@@ -4,7 +4,7 @@ A configurable GitHub Actions builder for Android kernels. The current configura
 
 Kernel sources, root managers, toolchains, and device-specific values are kept in `config/`. The workflow is the entry point; the scripts resolve those configuration files and build each requested source/manager combination.
 
-> **Current scope:** the simple workflow exposes the `marble` device and the predefined kernel sources. The advanced workflow also supports custom Git/manifest sources and one-run overrides. Adding a device still requires updating the workflow dropdowns and checking its AnyKernel3 installer settings.
+> **Current scope:** the simple workflow exposes the `marble` device and the predefined kernel sources. The advanced workflow also supports one-run overrides. Adding a device still requires updating the workflow dropdowns and checking its AnyKernel3 installer settings.
 
 ## What the workflow produces
 
@@ -20,7 +20,7 @@ The AnyKernel3 installer has `do.modules=0`, so the flashable ZIP installs the k
 ## Run a build
 
 1. Push or fork this repository to GitHub.
-2. Open **Actions** → **Build Kernel** → **Run workflow** for the recommended compact menu. Use **Build Kernel Advanced** when you need custom repositories, refs, custom kernel paths, all-sources builds, manager refs, or compiler/SUSFS/NoMount overrides.
+2. Open **Actions** → **Build Kernel** → **Run workflow** for the recommended compact menu. Use **Build Kernel Advanced** when you need all-sources builds, manager refs, or compiler/SUSFS/NoMount overrides.
 3. In the simple workflow, choose the device, source, manager checkboxes, and build options.
 4. Open the completed workflow run and download the artifact: one per source in `image-menu` mode, or one per source/manager pair in the other modes.
 5. Check `build-info.txt` and the ZIP name before flashing. Only flash a build that matches the device and ROM/kernel base it was built for.
@@ -35,7 +35,7 @@ Runner disk cleanup and swap setup are implemented in the reusable composite act
 
 ### Advanced workflow
 
-Use `Build Kernel Advanced` for `kernel_name`, `all_sources`, source and manager refs, custom Git/manifest source fields, and the `advanced_overrides` JSON field. The advanced workflow retains the full set of controls while sharing the same build implementation as the simple workflow.
+Use `Build Kernel Advanced` for `kernel_name`, `all_sources`, source and manager refs, and the `advanced_overrides` JSON field. The advanced workflow retains the full set of controls while sharing the same build implementation as the simple workflow.
 
 ### Recommended first build
 
@@ -49,13 +49,9 @@ The values below match the inputs declared in `.github/workflows/build-advanced.
 |---|---|---|
 | `device` | `marble` (default) | Device config file: `config/devices/marble.env`. Add a workflow dropdown option when adding another device. |
 | `kernel_name` | Text / empty | Overrides `CONFIG_LOCALVERSION`. Empty keeps the source's own `CONFIG_LOCALVERSION`. The `uname_hash` and `uname_run_id` inputs independently control the `-g<hash12>` and `-ab<run id>` suffixes; disabled suffixes are omitted and `-dirty` is suppressed. A leading `-` is added automatically when needed. |
-| `kernel_source` | `aospa` (default), `infinityx`, `lineage`, `shinkai`, `lunaris`, `melt`, `bouquet`, `custom` | Selects a key in `config/sources.json`, or a one-off custom source. |
-| `all_sources` | `false` (default) | Builds every entry in `config/sources.json`. It cannot be combined with `kernel_source=custom`; when enabled, the selected source is replaced by the configured source list. |
+| `kernel_source` | `aospa` (default), `infinityx`, `lineage`, `shinkai`, `lunaris`, `melt`, `bouquet` | Selects a key in `config/sources.json`. |
+| `all_sources` | `false` (default) | Builds every entry in `config/sources.json`. When enabled, the selected source is replaced by the configured source list. |
 | `source_ref` | Text / empty | Overrides a source revision. For a Git source it overrides the kernel repository ref. For a predefined manifest source it overrides only the kernel project revision, not the manifest revision or every project in the manifest. Custom-source behavior is described below. |
-| `custom_repo` | Text / empty | Required for `kernel_source=custom`. Use `owner/repository` or a supported Git URL. For `custom_fetch=manifest`, this is the manifest repository. |
-| `custom_ref` | Text / empty | Required for a custom source unless `source_ref` is supplied. For Git, this is the kernel repository ref; for a manifest, it is the manifest repository ref. |
-| `custom_fetch` | `git` (default), `manifest` | Selects how the custom source is fetched. |
-| `custom_kernel_path` | Text / empty | Optional path to the kernel tree inside the fetched repository/manifest. Defaults to `.` for Git and `kernel_platform/xiaomi/sm8450` for a custom manifest. |
 | `build_kernelsu` | `true` (default) / `false` | Build official KernelSU (tiann). |
 | `build_kernelsu_next` | `false` (default) / `true` | Build KernelSU-Next, from the `pershoot/KernelSU-Next` `dev-susfs` fork. |
 | `build_sukisu_nova` | `false` (default) / `true` | Build SukiSU Nova. |
@@ -317,12 +313,6 @@ The manifest parser expands nested `<include>` files, reads `<remote>`, `<defaul
 
 `source_ref` overrides the kernel revision for the selected source. For a predefined manifest source, only the kernel project revision is overridden; the rest of the manifest stays at its configured revisions.
 
-### Use a one-off custom source
-
-Choose `kernel_source=custom` and fill `custom_repo`, `custom_ref`, and `custom_fetch`. `custom_kernel_path` is optional. A custom Git source defaults to the repository root (`.`); a custom manifest defaults to `kernel_platform/xiaomi/sm8450` and `default.xml`.
-
-For a custom Git source, `source_ref` takes precedence over `custom_ref` when both are supplied. For a custom manifest, `custom_ref` selects the manifest revision; when `source_ref` is also supplied, it takes precedence for the manifest revision and is also passed as the kernel project revision override. `all_sources` cannot be used with `kernel_source=custom`.
-
 ## Add a device
 
 1. Copy [`config/devices/marble.env`](config/devices/marble.env) to `config/devices/<name>.env`.
@@ -383,7 +373,7 @@ Change the environment variables to test another source or manager. The script s
 
 | Log / symptom | Likely cause and next step |
 |---|---|
-| `Unable to fetch ... @ ...` | The repository, branch, tag, or commit is unavailable. Check the preset or override (`source_ref`, `custom_ref`, or `manager_ref`). |
+| `Unable to fetch ... @ ...` | The repository, branch, tag, or commit is unavailable. Check the preset or override (`source_ref` or `manager_ref`). |
 | `Kernel Makefile not found` | `kernel_path` does not point to the kernel tree, or the manifest path does not match the actual project path. |
 | `Could not detect a defconfig` / missing GKI fragment | Check `DEFCONFIG_SINGLE`, `GKI_FRAGMENTS`, source `defconfig`, `config_fragments`, and `defconfig_mode`. |
 | `Manager setup did not create a kernel Kconfig` | The selected manager setup script did not integrate at a path expected by the builder. Check the manager ref and setup script. |

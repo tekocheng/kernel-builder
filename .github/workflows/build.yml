@@ -89,10 +89,6 @@ jobs:
       kernel_source: ${{ inputs.kernel_source }}
       all_sources: false
       source_ref: ""
-      custom_repo: ""
-      custom_ref: ""
-      custom_fetch: git
-      custom_kernel_path: ""
       build_kernelsu: ${{ inputs.build_kernelsu }}
       build_kernelsu_next: ${{ inputs.build_kernelsu_next }}
       build_sukisu_nova: ${{ inputs.build_sukisu_nova }}

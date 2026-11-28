@@ -17,42 +17,6 @@ SPEC.loader.exec_module(plan)
 
 
 class PlanResolutionTests(unittest.TestCase):
-    def test_custom_source_source_ref_takes_precedence(self) -> None:
-        args = SimpleNamespace(
-            custom_repo="owner/kernel",
-            source_ref="override-sha",
-            custom_ref="custom-branch",
-            custom_fetch="git",
-            custom_kernel_path="",
-        )
-        entry = plan.source_entry("custom", args)
-        self.assertEqual(entry["repo"], "owner/kernel")
-        self.assertEqual(entry["ref"], "override-sha")
-        self.assertEqual(entry["kernel_path"], ".")
-
-    def test_custom_repo_rejects_unsupported_http_url(self) -> None:
-        args = SimpleNamespace(
-            custom_repo="http://example.invalid/kernel.git",
-            source_ref="",
-            custom_ref="main",
-            custom_fetch="git",
-            custom_kernel_path="",
-        )
-        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
-            plan.source_entry("custom", args)
-
-    def test_custom_manifest_default_path(self) -> None:
-        args = SimpleNamespace(
-            custom_repo="owner/manifest",
-            source_ref="",
-            custom_ref="manifest-branch",
-            custom_fetch="manifest",
-            custom_kernel_path="",
-        )
-        entry = plan.source_entry("custom", args)
-        self.assertEqual(entry["manifest_ref"], "manifest-branch")
-        self.assertEqual(entry["kernel_path"], "kernel_platform/xiaomi/sm8450")
-
     def test_uname_parts_are_independent_for_every_source(self) -> None:
         for key, entry in plan.SOURCES.items():
             self.assertEqual(plan.resolve_uname_parts("true", "auto", entry), (True, "auto"), key)
@@ -293,9 +257,6 @@ class MatrixTests(unittest.TestCase):
         args = SimpleNamespace(
             all_sources="true",
             kernel_source="aospa",
-            custom_repo="",
-            custom_ref="",
-            custom_fetch="git",
             manager="all",
             manager_ref="",
             toolchain="auto",
@@ -316,9 +277,6 @@ class MatrixTests(unittest.TestCase):
         values = dict(
             all_sources="false",
             kernel_source="aospa",
-            custom_repo="",
-            custom_ref="",
-            custom_fetch="git",
             manager="all",
             manager_ref="",
             toolchain="auto",
@@ -387,9 +345,6 @@ class MatrixTests(unittest.TestCase):
         args = SimpleNamespace(
             all_sources="true",
             kernel_source="aospa",
-            custom_repo="",
-            custom_ref="",
-            custom_fetch="git",
             manager="kernelsu",
             manager_ref="",
             toolchain="auto",
@@ -408,9 +363,6 @@ class MatrixTests(unittest.TestCase):
         args = SimpleNamespace(
             all_sources="false",
             kernel_source="aospa",
-            custom_repo="",
-            custom_ref="",
-            custom_fetch="git",
             manager="kernelsu",
             manager_ref="",
             toolchain="auto",

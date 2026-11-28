@@ -154,9 +154,8 @@ def validate() -> list[str]:
     require("workflow_dispatch:" in advanced_workflow and "workflow_call:" in advanced_workflow and "jobs:" in advanced_workflow, "build-advanced.yml must define workflow_dispatch, workflow_call, and jobs")
     expected_choices = {
         "device": sorted(devices),
-        "kernel_source": sorted([*sources.keys(), "custom"]),
+        "kernel_source": sorted(sources.keys()),
         "toolchain": sorted(["auto", *toolchains.keys()]),
-        "custom_fetch": ["git", "manifest"],
         "lto": ["full", "none", "thin"],
         "build_scope": ["full", "image-menu", "image-only"],
     }
@@ -170,8 +169,7 @@ def validate() -> list[str]:
         actual = sorted(workflow_choice_options(advanced_workflow, input_name))
         require(actual == expected, f"Workflow choice '{input_name}' mismatch. Expected {expected}, found {actual}")
 
-    # The simple menu lists the same choices, except that it has no "custom" source.
-    simple_choices = {**expected_choices, "kernel_source": sorted(sources.keys())}
+    simple_choices = expected_choices
     for input_name in ("device", "kernel_source", "toolchain", "lto", "build_scope"):
         actual = sorted(workflow_choice_options(workflow, input_name))
         require(
@@ -199,8 +197,8 @@ def validate() -> list[str]:
     require(not dead, f"build.yml declares inputs that are never forwarded to build-advanced.yml: {dead}")
 
     required_inputs = {
-        "kernel_name", "all_sources", "source_ref", "custom_repo", "custom_ref", "custom_fetch",
-        "custom_kernel_path", "manager_ref", "enable_susfs", "enable_nomount", "advanced_overrides",
+        "kernel_name", "all_sources", "source_ref",
+        "manager_ref", "enable_susfs", "enable_nomount", "advanced_overrides",
         "lto", "build_scope", "ccache", "uname_hash", "uname_run_id", "draft_release",
     }
     for input_name in sorted(required_inputs):

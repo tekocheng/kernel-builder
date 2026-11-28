@@ -15,10 +15,6 @@ USE_UNAME_RUN_ID="${USE_UNAME_RUN_ID:-auto}"
 BUILTIN_NOMOUNT="${BUILTIN_NOMOUNT:-false}"
 KERNEL_SOURCE="${KERNEL_SOURCE:-aosp}"
 SOURCE_REF="${SOURCE_REF:-}"
-CUSTOM_REPO="${CUSTOM_REPO:-}"
-CUSTOM_REF="${CUSTOM_REF:-}"
-CUSTOM_FETCH="${CUSTOM_FETCH:-git}"
-CUSTOM_KERNEL_PATH="${CUSTOM_KERNEL_PATH:-}"
 MANAGER="${MANAGER:-kernelsu}"
 MANAGER_REF="${MANAGER_REF:-}"
 MANAGER_REF_INPUT="${MANAGER_REF}"
@@ -54,9 +50,6 @@ if [[ -n "${GITHUB_OUTPUT:-}" && "${MATRIX_ONLY:-}" == "1" ]]; then
     --device "${DEVICE}" \
     --kernel-source "${KERNEL_SOURCE}" \
     --source-ref "${SOURCE_REF}" \
-    --custom-repo "${CUSTOM_REPO}" \
-    --custom-ref "${CUSTOM_REF}" \
-    --custom-fetch "${CUSTOM_FETCH}" \
     --manager "${MANAGER}" \
     --manager-ref "${MANAGER_REF}" \
     --toolchain "${TOOLCHAIN}" \
@@ -77,10 +70,6 @@ python3 "${ROOT}/scripts/plan.py" write-plan \
   --kernel-name "${KERNEL_NAME}" \
   --kernel-source "${KERNEL_SOURCE}" \
   --source-ref "${SOURCE_REF}" \
-  --custom-repo "${CUSTOM_REPO}" \
-  --custom-ref "${CUSTOM_REF}" \
-  --custom-fetch "${CUSTOM_FETCH}" \
-  --custom-kernel-path "${CUSTOM_KERNEL_PATH}" \
   --manager "${MANAGER}" \
   --manager-ref "${MANAGER_REF}" \
   --susfs "${ENABLE_SUSFS}" \

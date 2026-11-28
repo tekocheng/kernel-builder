@@ -14,7 +14,7 @@ on:
         type: string
         default: ""
       kernel_source:
-        description: "Kernel source. Matches a key in config/sources.json, or custom."
+        description: "Kernel source. Matches a key in config/sources.json."
         type: choice
         default: aospa
         options:
@@ -25,32 +25,12 @@ on:
           - lunaris
           - melt
           - bouquet
-          - custom
       all_sources:
         description: "Build every source in config/sources.json"
         type: boolean
         default: false
       source_ref:
         description: "Override the kernel branch, tag, or commit. Empty keeps the preset."
-        type: string
-        default: ""
-      custom_repo:
-        description: "custom source only. owner/name, or a manifest repo when custom_fetch=manifest"
-        type: string
-        default: ""
-      custom_ref:
-        description: "custom source only. Branch, tag, or commit"
-        type: string
-        default: ""
-      custom_fetch:
-        description: "custom source only"
-        type: choice
-        default: git
-        options:
-          - git
-          - manifest
-      custom_kernel_path:
-        description: "custom source only. Kernel path inside the tree. Empty uses the default."
         type: string
         default: ""
       build_kernelsu:
@@ -147,22 +127,6 @@ on:
         type: boolean
         default: false
       source_ref:
-        required: false
-        type: string
-        default: ""
-      custom_repo:
-        required: false
-        type: string
-        default: ""
-      custom_ref:
-        required: false
-        type: string
-        default: ""
-      custom_fetch:
-        required: false
-        type: string
-        default: "git"
-      custom_kernel_path:
         required: false
         type: string
         default: ""
@@ -308,9 +272,6 @@ jobs:
           KERNEL_SOURCE: ${{ inputs.kernel_source }}
           ALL_SOURCES: ${{ inputs.all_sources }}
           SOURCE_REF: ${{ inputs.source_ref }}
-          CUSTOM_REPO: ${{ inputs.custom_repo }}
-          CUSTOM_REF: ${{ inputs.custom_ref }}
-          CUSTOM_FETCH: ${{ inputs.custom_fetch }}
           MANAGER_REF: ${{ inputs.manager_ref }}
           TOOLCHAIN: ${{ inputs.toolchain }}
           BUILD_SCOPE: ${{ inputs.build_scope }}
@@ -361,10 +322,6 @@ jobs:
           KERNEL_NAME: ${{ inputs.kernel_name }}
           KERNEL_SOURCE: ${{ matrix.source }}
           SOURCE_REF: ${{ inputs.source_ref }}
-          CUSTOM_REPO: ${{ inputs.custom_repo }}
-          CUSTOM_REF: ${{ inputs.custom_ref }}
-          CUSTOM_FETCH: ${{ inputs.custom_fetch }}
-          CUSTOM_KERNEL_PATH: ${{ inputs.custom_kernel_path }}
           MANAGER: ${{ matrix.manager }}
           MANAGER_REF: ${{ inputs.manager_ref }}
           ENABLE_SUSFS: ${{ inputs.enable_susfs }}
