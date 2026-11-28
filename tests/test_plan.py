@@ -119,6 +119,36 @@ class PlanResolutionTests(unittest.TestCase):
     def test_resolve_manager_accepts_a_short_name(self) -> None:
         self.assertEqual(plan.resolve_manager("ksunext", False, "")["MANAGER"], "kernelsu-next")
 
+    def test_write_plan_takes_a_list_only_for_image_menu(self) -> None:
+        import subprocess
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            base = ["python3", str(Path(plan.__file__)), "write-plan", "--device", "marble", "--kernel-source", "aospa",
+                    "--manager", "ksu,ksunext,sukisu", "--lto", "thin", "--out", f"{tmp}/plan.env"]
+            refused = subprocess.run(base + ["--build-scope", "image-only"], capture_output=True, text=True)
+            self.assertNotEqual(refused.returncode, 0)
+            self.assertIn("needs build_scope=image-menu", refused.stderr)
+            accepted = subprocess.run(base + ["--build-scope", "image-menu"], capture_output=True, text=True)
+            self.assertEqual(accepted.returncode, 0, accepted.stderr)
+            text = (Path(tmp) / "plan.env").read_text()
+            self.assertIn("MANAGER=kernelsu\n", text)
+            self.assertIn("MANAGER_LIST='kernelsu kernelsu-next sukisu-nova'", text)
+            self.assertIn("SUSFS_REQUESTED=true", text)
+
+    def test_manager_env_describes_one_manager(self) -> None:
+        import subprocess
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "m.env"
+            result = subprocess.run(
+                ["python3", str(Path(plan.__file__)), "manager-env", "--manager", "next", "--susfs", "true", "--out", str(out)],
+                capture_output=True, text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            text = out.read_text()
+            self.assertIn("MANAGER=kernelsu-next", text)
+            self.assertIn("ENABLE_SUSFS=true", text)
+
     def test_kowsu_builds_without_susfs(self) -> None:
         kow = plan.resolve_manager("kowsu", False, "")
         self.assertEqual(kow["MANAGER_DISPLAY"], "KOWSU")
@@ -322,7 +352,9 @@ class MatrixTests(unittest.TestCase):
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
             plan.emit_matrix(self.matrix_args(build_scope="image-menu"))
-        managers = [row["manager"] for row in json.loads(output.getvalue())["include"]]
+        rows = json.loads(output.getvalue())["include"]
+        self.assertEqual(len(rows), 1)
+        managers = rows[0]["manager"].split(",")
         self.assertNotIn("none", managers)
         expected = sorted(m for m in plan.MANAGERS if m != "none" and not plan.MANAGERS[m].get("susfs_blocked"))
         self.assertEqual(sorted(managers), expected)
@@ -352,6 +384,21 @@ class MatrixTests(unittest.TestCase):
             plan.emit_matrix(self.matrix_args(manager="none,ksu", build_scope="image-menu"))
         self.assertEqual([row["manager"] for row in json.loads(output.getvalue())["include"]], ["kernelsu"])
         self.assertIn("Leaving 'none' out", stderr.getvalue())
+
+    def test_image_menu_is_one_job_per_source_with_every_manager(self) -> None:
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            plan.emit_matrix(self.matrix_args(manager="ksu,ksunext,sukisu", build_scope="image-menu"))
+        self.assertEqual(
+            json.loads(output.getvalue())["include"],
+            [{"source": "aospa", "manager": "kernelsu,kernelsu-next,sukisu-nova"}],
+        )
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            plan.emit_matrix(self.matrix_args(manager="ksu,ksunext", all_sources="true", build_scope="image-menu"))
+        rows = json.loads(output.getvalue())["include"]
+        self.assertEqual(len(rows), len(plan.SOURCES))
+        self.assertTrue(all(row["manager"] == "kernelsu,kernelsu-next" for row in rows))
 
     def test_all_with_susfs_skips_blocked_managers_with_a_warning(self) -> None:
         output, stderr = io.StringIO(), io.StringIO()

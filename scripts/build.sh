@@ -21,6 +21,7 @@ CUSTOM_FETCH="${CUSTOM_FETCH:-git}"
 CUSTOM_KERNEL_PATH="${CUSTOM_KERNEL_PATH:-}"
 MANAGER="${MANAGER:-kernelsu}"
 MANAGER_REF="${MANAGER_REF:-}"
+MANAGER_REF_INPUT="${MANAGER_REF}"
 ENABLE_SUSFS="${ENABLE_SUSFS:-true}"
 SUSFS_REF="${SUSFS_REF:-}"
 SUSFS_BRANCH="${SUSFS_BRANCH:-}"
@@ -864,46 +865,94 @@ save_variant() {
   log "Variant ${name}: $(sha1sum "${SRC}/variants/Image_${name}" | awk '{print $1}')"
 }
 
+reset_kernel_tree() {
+  # Back to a plain checkout, so the next manager does not stack on top of the last one.
+  # out/ stays, so the build remains incremental.
+  git -C "${KERNEL_DIR}" rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "The kernel tree is not a git checkout; cannot switch managers"
+  rm -rf "${KERNEL_DIR}/KernelSU" "${KERNEL_DIR}/KernelSU-Next" "${KERNEL_DIR}/out/drivers/kernelsu"
+  git -C "${KERNEL_DIR}" checkout -q -- .
+  git -C "${KERNEL_DIR}" clean -fdq -e out
+}
+
+load_manager() {
+  local key="$1"
+  python3 "${ROOT}/scripts/plan.py" manager-env --manager "${key}" --susfs "${SUSFS_REQUESTED}" \
+    --manager-ref "${MANAGER_REF_INPUT}" --out "${SRC}/manager-${key}.env"
+  # shellcheck disable=SC1090
+  source "${SRC}/manager-${key}.env"
+}
+
 build_patch_variants() {
   [[ "${MANAGER}" != "none" ]] || die "build_scope=image-menu needs a root manager"
   [[ "${BUILD_SCOPE}" == "image-only" ]] || die "build_scope=image-menu needs an image-only build"
-  local manager="${MANAGER}" susfs="${ENABLE_SUSFS}"
-  rm -rf "${SRC}/variants"
+  local -a managers displays
+  read -r -a managers <<< "${MANAGER_LIST:-${MANAGER}}"
+  local key first=true any_susfs=false
+  rm -rf "${SRC}/variants" "${SRC}/menu"
+  mkdir -p "${SRC}/menu"
+  : > "${SRC}/menu/entries.txt"
+  : > "${RELEASE}/manager-commits.txt"
   # Same build number and timestamp in every variant, so the diffs only hold real changes.
   export KBUILD_BUILD_VERSION=1
   export KBUILD_BUILD_TIMESTAMP="$(date -u)"
+  if [[ "${LTO}" == "full" && "${#managers[@]}" -gt 1 ]]; then
+    log "::warning::${#managers[@]} managers with lto=full means $(( 1 + 2 * ${#managers[@]} )) full-LTO links in one job; lto=thin is much safer on a 16 GB runner"
+  fi
 
   # NoMount is part of every variant, so it goes in first. Its setup only links fs/nomount and adds
   # one line each to fs/Makefile and fs/Kconfig, which the SUSFS kernel patch does not depend on.
   apply_nomount
 
-  # The kernel tree is patched step by step: stock, then the manager, then SUSFS.
-  # Each step is built on top of the previous one, so the diffs are all relative to stock.
-  log "Variant 1: stock (no manager)"
+  log "Variant stock (no manager)"
   MANAGER=none
   ENABLE_SUSFS=false
   rm -f "${RELEASE}"/Image*
   make_kernel
   save_variant stock
 
-  log "Variant 2: ${manager}"
-  MANAGER="${manager}"
-  ENABLE_SUSFS=false
-  apply_manager
-  record_manager_commit
-  rm -f "${RELEASE}"/Image*
-  make_kernel
-  save_variant ksu
-
-  if [[ "${susfs}" == "true" ]]; then
-    log "Variant 3: ${manager} + SUSFS"
-    ENABLE_SUSFS=true
-    apply_susfs
+  # One manager after the other, each on a clean tree: manager only, then manager plus SUSFS.
+  for key in "${managers[@]}"; do
+    load_manager "${key}"
+    local wants_susfs="${ENABLE_SUSFS}"
+    ENABLE_SUSFS=false
+    if [[ "${first}" != "true" ]]; then
+      log "Resetting the kernel tree before ${MANAGER_DISPLAY}"
+      reset_kernel_tree
+      apply_nomount
+    fi
+    first=false
+    log "Variant ${key}: ${MANAGER_DISPLAY}"
+    apply_manager
+    record_manager_commit
+    printf '%s=%s\n' "${key}" "$(tr -d '[:space:]' < "${RELEASE}/manager-commit.txt")" >> "${RELEASE}/manager-commits.txt"
     rm -f "${RELEASE}"/Image*
     make_kernel
-    save_variant susfs
-  fi
-  ENABLE_SUSFS="${susfs}"
+    save_variant "${key}"
+    if [[ "${wants_susfs}" == "true" ]]; then
+      log "Variant ${key}-susfs: ${MANAGER_DISPLAY} + SUSFS"
+      ENABLE_SUSFS=true
+      apply_susfs
+      rm -f "${RELEASE}"/Image*
+      make_kernel
+      save_variant "${key}-susfs"
+      any_susfs=true
+    fi
+    printf '%s;%s;%s\n' "${key}" "${MANAGER_DISPLAY}" "${wants_susfs}" >> "${SRC}/menu/entries.txt"
+    displays+=("${MANAGER_DISPLAY}")
+  done
+
+  # Describe the whole menu for the metadata and the ZIP name.
+  local joined_displays="" name
+  for name in "${displays[@]}"; do joined_displays+="${joined_displays:+, }${name}"; done
+  MANAGER="${managers[*]}"
+  MANAGER="${MANAGER// /,}"
+  MANAGER_DISPLAY="${joined_displays}"
+  MANAGER_REPO=""
+  MANAGER_REF=""
+  MANAGER_EFFECTIVE_REPO=""
+  MANAGER_EFFECTIVE_REF=""
+  ENABLE_SUSFS="${any_susfs}"
+  paste -sd, "${RELEASE}/manager-commits.txt" > "${RELEASE}/manager-commit.txt"
   # Keep the stock image as release/Image: it is the one inside the ZIP.
   cp -f "${SRC}/variants/Image_stock" "${RELEASE}/Image"
 }
@@ -915,14 +964,12 @@ package_patch_zip() {
   git -C "${ak}" rev-parse HEAD > "${RELEASE}/anykernel-commit.txt"
   build_hdiffz
 
-  local has_susfs=false
-  [[ -s "${v}/Image_susfs" ]] && has_susfs=true
   local version
   version="$(tr -d '\n' < "${RELEASE}/susfs-version.txt" 2>/dev/null || true)"
   local string="${DEVICE} ${SOURCE_DISPLAY}"
   [[ -n "${KERNEL_NAME}" ]] && string="${string} (${KERNEL_NAME#-})"
-  string="${string} ${MANAGER_DISPLAY} menu"
-  [[ "${has_susfs}" == "true" ]] && string="${string} susfs"
+  string="${string} menu: ${MANAGER_DISPLAY}"
+  [[ "${ENABLE_SUSFS}" == "true" ]] && string="${string} + susfs"
   [[ -n "${version}" ]] && string="${string} ${version}"
   AK_KERNEL_STRING="${string}" AK_DEVICE_NAME_1="${DEVICE_NAME_1}" AK_DEVICE_NAME_2="${DEVICE_NAME_2}" \
     python3 "${ROOT}/scripts/render_ak3.py" "${ROOT}/ak3/anykernel-patch.sh" "${ak}/anykernel.sh"
@@ -932,10 +979,9 @@ package_patch_zip() {
 
   cp -f "${v}/Image_stock" "${ak}/Image"
   mkdir -p "${ak}/bs_patches"
-  local sha_stock sha_ksu sha_susfs=""
+  local sha_stock
   sha_stock="$(sha1sum "${v}/Image_stock" | awk '{print $1}')"
-  sha_ksu="$(sha1sum "${v}/Image_ksu" | awk '{print $1}')"
-  [[ "${sha_stock}" != "${sha_ksu}" ]] || die "The KernelSU image is identical to the stock image"
+  printf 'SHA1_STOCK="%s"\n' "${sha_stock}" > "${ak}/bs_patches/sha1.env"
 
   make_diff() {
     local name="$1" new="$2" want="$3" out="${ak}/bs_patches/$1.p" check="${SRC}/diff-check.bin"
@@ -945,22 +991,30 @@ package_patch_zip() {
     rm -f "${check}"
     log "${name}.p: $(stat -c%s "${out}") bytes"
   }
-  make_diff ksu "${v}/Image_ksu" "${sha_ksu}"
-  if [[ "${has_susfs}" == "true" ]]; then
-    sha_susfs="$(sha1sum "${v}/Image_susfs" | awk '{print $1}')"
-    make_diff susfs "${v}/Image_susfs" "${sha_susfs}"
-  fi
-  {
-    printf 'SHA1_STOCK="%s"\n' "${sha_stock}"
-    printf 'SHA1_KSU="%s"\n' "${sha_ksu}"
-    printf 'SHA1_SUSFS="%s"\n' "${sha_susfs}"
-  } > "${ak}/bs_patches/sha1.env"
+
+  # bs_patches/managers.txt: key;display name;sha1 of the manager image;sha1 of the SUSFS image or "-"
+  local key display wants sha_m sha_s slug="" shown=""
+  : > "${ak}/bs_patches/managers.txt"
+  while IFS=';' read -r key display wants; do
+    sha_m="$(sha1sum "${v}/Image_${key}" | awk '{print $1}')"
+    [[ "${sha_m}" != "${sha_stock}" ]] || die "The ${display} image is identical to the stock image"
+    make_diff "${key}" "${v}/Image_${key}" "${sha_m}"
+    sha_s="-"
+    if [[ "${wants}" == "true" ]]; then
+      sha_s="$(sha1sum "${v}/Image_${key}-susfs" | awk '{print $1}')"
+      make_diff "${key}-susfs" "${v}/Image_${key}-susfs" "${sha_s}"
+    fi
+    printf '%s;%s;%s;%s\n' "${key}" "${display}" "${sha_m}" "${sha_s}" >> "${ak}/bs_patches/managers.txt"
+    slug+="${slug:+_}${key}"
+    shown+="${shown:+, }\`${key}.p\`"
+    [[ "${wants}" == "true" ]] && shown+=", \`${key}-susfs.p\`"
+  done < "${SRC}/menu/entries.txt"
 
   cp -f "${ROOT}/ak3/tools-extra/hpatchz" "${ROOT}/ak3/tools-extra/keycheck" "${ak}/tools/"
   chmod 755 "${ak}/tools/hpatchz" "${ak}/tools/keycheck"
   rm -rf "${ak}/.git" "${ak}/README.md" "${ak}/"*.placeholder
   local run="${GITHUB_RUN_NUMBER:-local}"
-  local name="${DEVICE}-${SOURCE_KEY}-${MANAGER}-menu-r${run}.zip"
+  local name="${DEVICE}-${SOURCE_KEY}-${slug}-menu-r${run}.zip"
   (
     cd "${ak}"
     zip -r9 "${RELEASE}/${name}" . -x '.git/*'
@@ -972,7 +1026,7 @@ package_patch_zip() {
     {
       echo "### ${name}"
       echo
-      echo "Menu ZIP: stock Image plus \`ksu.p\`$( [[ "${has_susfs}" == "true" ]] && echo " and \`susfs.p\`")."
+      echo "Menu ZIP: stock Image plus ${shown}."
       echo
       echo "**Kernel uname:** \`$(cat "${RELEASE}/kernel-release.txt" 2>/dev/null)\`"
       echo

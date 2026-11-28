@@ -179,7 +179,7 @@ jobs:
     name: ${{ matrix.source }} / ${{ matrix.manager }}
     needs: matrix
     runs-on: ubuntu-24.04
-    timeout-minutes: 180
+    timeout-minutes: 300
     strategy:
       fail-fast: false
       max-parallel: 2

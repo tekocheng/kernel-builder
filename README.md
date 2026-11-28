@@ -57,7 +57,7 @@ The values below match the inputs declared in `.github/workflows/build.yml`.
 | `toolchain_url` | HTTPS URL / empty | Optional direct link to a `.tar.gz` or `.tar.xz` compiler archive. When supplied, it overrides `toolchain` for that run. The archive must contain `bin/clang` at its root or within the supported directory depth. The URL must be HTTPS; embedded username/password credentials are rejected. The workflow log and build metadata do not expose URL credentials, query strings, or fragments. The uploaded `plan.env` is sanitized by an exit trap, including when a later build step fails. |
 | `toolchain_sha256` | 64-character SHA-256 / empty | Optional expected checksum for the selected archive. It does not apply to the git toolchain `android-r596125`: choosing that toolchain yourself with a checksum stops with an error, while a checksum shared across `all_sources` is ignored for it with a warning. A mismatch stops the build before extraction. When omitted, the builder still records the downloaded archive's actual checksum but cannot verify it against a trusted expected value. |
 | `lto` | `thin` (default), `none`, `full` | Selects the kernel LTO configuration. See [LTO](#lto). |
-| `build_scope` | `image-only` (default), `full`, `image-menu` | `image-menu` is an image-only build packaged as a [Patch-menu ZIP](#patch-menu-zip). `image-only` builds the flashable kernel image. `full` also builds in-tree modules and DTBs, and builds the configured external SM8450 techpack modules where the source provides a techpack list. |
+| `build_scope` | `image-only` (default), `full`, `image-menu` | `image-menu` is an image-only build that builds every manager in the `manager` list in one job and packages them as one [Patch-menu ZIP](#patch-menu-zip). `image-only` builds the flashable kernel image. `full` also builds in-tree modules and DTBs, and builds the configured external SM8450 techpack modules where the source provides a techpack list. |
 | `ccache` | `true` (default), `false` | Enables compiler caching. The workflow also caches toolchain files, ccache data, and the ThinLTO cache between runs. |
 | `uname_hash` | `true` (default), `false` | Adds `-g<kernel commit>` to the kernel uname. |
 | `uname_run_id` | `auto` (default), `off` / `none`, or your own text | `auto` adds `-ab<run id>`. `off` or `none` adds nothing. Any other text (1 to 24 characters from letters, digits, `.`, `_`, `-`) is added as `-<text>`, for example `r35` gives `-r35`. With `uname_hash` also off and this set to `off`, the uname is the plain release string (kernel version plus `CONFIG_LOCALVERSION`). |
@@ -67,7 +67,7 @@ The values below match the inputs declared in `.github/workflows/build.yml`.
 
 `all_sources` and `manager=all` expand into a matrix. If both are enabled, the workflow builds the Cartesian product of all configured sources and all configured managers. There are currently seven sources and six manager entries (including `none`), so that combination schedules 42 build jobs, or 35 while `enable_susfs=true`, because KOWSU is skipped then.
 
-With `build_scope=image-menu`, the `none` manager is left out of the matrix because the menu ZIP needs a manager to patch in. `manager=all` then schedules the four real managers, and `manager=none` stops with an error before any job starts.
+With `build_scope=image-menu`, the `none` manager is left out because the menu ZIP needs a manager to patch in, and `manager=none` stops with an error before any job starts. The matrix then has one job per source that carries the whole manager list (`manager=all` means every manager that can take SUSFS), instead of one job per manager.
 
 Each matrix job has its own artifact named:
 
@@ -179,25 +179,28 @@ When files are produced, `full` adds `modules.tar.gz` and/or `dtbs.tar.gz` to th
 
 ## Patch-menu ZIP
 
-`build_scope=image-menu` packages the kernel the way the Bouquet Kernel installer does. Instead of one Image per ZIP, a single run builds three variants from the same tree, one on top of the other:
+`build_scope=image-menu` packages the kernel the way the Bouquet Kernel installer does. One runner builds everything, one build after the other, and the ZIP lets you pick the manager when you flash:
 
 1. **stock**: no root manager.
-2. **ksu**: the selected manager, no SUSFS.
-3. **susfs**: the manager plus SUSFS (only when `enable_susfs=true`).
+2. **one build per manager** in the `manager` list, for example `kernelsu,kernelsu-next,sukisu-nova`, each on a clean tree.
+3. **one more build per manager with SUSFS**, when `enable_susfs=true` and the manager supports it.
 
-The ZIP holds the stock `Image`, `bs_patches/ksu.p` and `bs_patches/susfs.p` (HDiffPatch diffs against the stock Image), and `bs_patches/sha1.env` with the SHA-1 of all three images. At flash time the installer asks with the volume keys:
+Between two managers the builder resets the kernel tree (`git checkout` and `git clean`, keeping `out/` so the build stays incremental), applies NoMount again and then the next manager, so managers never stack on each other. Matrix jobs run on separate runners, so `manager=all` or a list with any other scope still means one job per manager. With `image-menu` the whole list is one job per source.
 
-- Vol+ on "KernelSU?" applies `ksu.p`, then asks about SUSFS and applies `susfs.p` instead on Vol+.
-- Vol- keeps the plain kernel. No key within 20 seconds counts as Vol-, so an install from an app without key input flashes the plain kernel instead of hanging.
+The ZIP holds the stock `Image`, one diff per variant in `bs_patches/` (`<manager>.p` and `<manager>-susfs.p`, HDiffPatch diffs against the stock Image), `bs_patches/managers.txt` (key, display name and SHA-1 of each image) and `bs_patches/sha1.env` (SHA-1 of the stock image). At flash time the installer asks with the volume keys:
+
+- For each manager in order: "Install the kernel with <manager> built in?" Vol+ picks it and then asks whether to add SUSFS (Vol+ applies the `-susfs` diff instead). Vol- moves on to the next manager.
+- No to every manager, or no key within 20 seconds per question, installs the plain kernel. So an install from an app without key input never hangs.
 - The stock image is checked before patching and the result after patching. A mismatch aborts before anything is flashed.
 
-The builder verifies every diff on the runner too: it applies the diff to the stock Image and compares the SHA-1 with the variant it came from. The ZIP is named `<device>-<source>-<manager>-menu-r<run>.zip`.
+The builder verifies every diff on the runner too: it applies the diff to the stock Image and compares the SHA-1 with the variant it came from. The ZIP is named `<device>-<source>-<manager>_<manager>-menu-r<run>.zip`, and `build-manifest.json` lists the manager commits as `key=commit` pairs.
 
 Limits:
 
 - Kernel image only, like the normal ZIP. It does not install modules, DTBs or `vendor_dlkm`, which some sources need to boot.
-- With `enable_nomount`, NoMount is applied once before the first build, so all three variants contain it and the diffs only carry the manager and SUSFS.
-- It builds the kernel three times in one job. The second and third builds are incremental, but the job is longer than a normal build.
+- With `enable_nomount`, NoMount is part of every variant, so the diffs only carry the manager and SUSFS.
+- A job runs 1 + 2 x managers kernel builds in a row (7 for three managers with SUSFS). The first is a full build, the others are incremental. The job timeout is 300 minutes. The memory peak is the same as for one build, because each link starts after the previous one has finished, but one failed link stops the whole job, so use `lto=thin`. The run warns when `lto=full` is combined with more than one manager.
+- Every extra manager adds about 3 MB to the ZIP for its diff, and as much again for its SUSFS diff. The Telegram upload limit is 50 MB.
 - The same build number and timestamp are used for all variants so the diffs stay small.
 - `ak3/tools-extra/` holds prebuilt `hpatchz` (aarch64) and `keycheck` (ARM) taken from the Bouquet Kernel v5.3 ZIP. See the README in that folder.
 - The CI runner builds `hdiffz` from [HDiffPatch](https://github.com/sisong/HDiffPatch) at `v5.1.3` (`HDIFFPATCH_REF`).
