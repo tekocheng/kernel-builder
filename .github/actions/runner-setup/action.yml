@@ -56,9 +56,6 @@ runs:
             output.write(f"disk_threshold_gib={int(cfg['disk_threshold_gib'])}\n")
             output.write(f"swap_size_gb={int(swap['size_gb'])}\n")
             output.write(f"swappiness={int(swap.get('swappiness', 100))}\n")
-            output.write(f"cleanup_action={cleanup['action']}\n")
-            output.write(f"swap_action={swap['action']}\n")
-            output.write(f"swap_enabled={str(swap.get('enabled_when_lto_not'))}\n")
             for mode in ("aggressive", "light"):
                 for key, value in cleanup[mode].items():
                     if isinstance(value, bool):
