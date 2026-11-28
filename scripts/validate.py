@@ -138,7 +138,10 @@ def validate() -> list[str]:
 
     workflow_path = ROOT / ".github" / "workflows" / "build.yml"
     workflow = workflow_path.read_text(encoding="utf-8")
+    advanced_workflow_path = ROOT / ".github" / "workflows" / "build-advanced.yml"
+    advanced_workflow = advanced_workflow_path.read_text(encoding="utf-8")
     require("workflow_dispatch:" in workflow and "jobs:" in workflow, "build.yml must define workflow_dispatch and jobs")
+    require("workflow_dispatch:" in advanced_workflow and "workflow_call:" in advanced_workflow and "jobs:" in advanced_workflow, "build-advanced.yml must define workflow_dispatch, workflow_call, and jobs")
     expected_choices = {
         "device": sorted(devices),
         "kernel_source": sorted([*sources.keys(), "custom"]),
@@ -154,7 +157,7 @@ def validate() -> list[str]:
             require(alias not in seen_names, f"Short name '{alias}' of manager '{key}' is already used")
             seen_names.add(alias)
     for input_name, expected in expected_choices.items():
-        actual = sorted(workflow_choice_options(workflow, input_name))
+        actual = sorted(workflow_choice_options(advanced_workflow, input_name))
         require(actual == expected, f"Workflow choice '{input_name}' mismatch. Expected {expected}, found {actual}")
 
     # GitHub rejects a workflow_dispatch with more than 25 inputs, and the whole workflow then fails to load.
@@ -170,7 +173,7 @@ def validate() -> list[str]:
         "build_scope", "ccache", "draft_release",
     }
     for input_name in sorted(required_inputs):
-        workflow_choice_options(workflow, input_name)
+        workflow_choice_options(advanced_workflow, input_name)
 
     anykernel = (ROOT / "ak3" / "anykernel.sh").read_text(encoding="utf-8")
     for placeholder in ("__KERNEL_STRING__", "__DEVICE_NAME_1__", "__DEVICE_NAME_2__"):
