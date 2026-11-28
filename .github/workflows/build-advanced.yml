@@ -137,15 +137,15 @@ on:
       device:
         required: false
         type: string
-        default: ''
+        default: "marble"
       kernel_name:
         required: false
         type: string
-        default: ''
+        default: ""
       kernel_source:
         required: false
         type: string
-        default: ''
+        default: "aospa"
       all_sources:
         required: false
         type: boolean
@@ -153,27 +153,27 @@ on:
       source_ref:
         required: false
         type: string
-        default: ''
+        default: ""
       custom_repo:
         required: false
         type: string
-        default: ''
+        default: ""
       custom_ref:
         required: false
         type: string
-        default: ''
+        default: ""
       custom_fetch:
         required: false
         type: string
-        default: ''
+        default: "git"
       custom_kernel_path:
         required: false
         type: string
-        default: ''
+        default: ""
       build_kernelsu:
         required: false
         type: boolean
-        default: false
+        default: true
       build_kernelsu_next:
         required: false
         type: boolean
@@ -193,11 +193,11 @@ on:
       manager_ref:
         required: false
         type: string
-        default: ''
+        default: ""
       enable_susfs:
         required: false
         type: boolean
-        default: false
+        default: true
       enable_nomount:
         required: false
         type: boolean
@@ -205,31 +205,31 @@ on:
       toolchain:
         required: false
         type: string
-        default: ''
+        default: "auto"
       advanced_overrides:
         required: false
         type: string
-        default: ''
+        default: "{}"
       lto:
         required: false
         type: string
-        default: ''
+        default: "thin"
       build_scope:
         required: false
         type: string
-        default: ''
+        default: "image-menu"
       ccache:
         required: false
         type: boolean
-        default: false
+        default: true
       uname_hash:
         required: false
         type: boolean
-        default: false
+        default: true
       uname_run_id:
         required: false
         type: string
-        default: ''
+        default: "auto"
       draft_release:
         required: false
         type: boolean
