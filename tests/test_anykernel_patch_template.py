@@ -47,7 +47,7 @@ class PatchTemplateTests(unittest.TestCase):
 
     def test_image_is_checked_before_any_patch_is_applied(self):
         check = self.text.index('"$SHA1_STOCK" ] || abort "! Kernel image is corrupted!"')
-        menu = self.text.index("ask_yes_no \\")
+        menu = self.text.index("pick_manager || true;")
         self.assertLess(check, menu)
 
     def test_no_placeholder_other_than_the_three_known_ones(self):
@@ -55,6 +55,9 @@ class PatchTemplateTests(unittest.TestCase):
             sorted(set(re.findall(r"__[A-Z_0-9]+__", self.text))),
             ["__DEVICE_NAME_1__", "__DEVICE_NAME_2__", "__KERNEL_STRING__"],
         )
+
+    def test_menu_helpers_are_inside_the_tested_range(self):
+        self.assertIn("pick_manager()", helper_functions(self.text))
 
     def test_rendered_script_parses(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -123,6 +126,43 @@ class MenuBehaviourTests(unittest.TestCase):
         result = self.run_helpers('ask_yes_no "q"; echo "rc=$?"', [])
         self.assertIn("rc=1", result.stdout)
         self.assertIn("No key pressed", result.stdout)
+
+    def menu_body(self, keys_after: str = "") -> str:
+        return textwrap.dedent("""\
+            mkdir -p "$AKHOME/bs_patches"
+            printf 'ksu;KernelSU;sha-ksu;sha-ksu-s\\nnext;KernelSU-Next;sha-next;-\\nnova;SukiSU Nova;sha-nova;sha-nova-s\\n' > "$AKHOME/bs_patches/managers.txt"
+            for f in ksu ksu-susfs next nova nova-susfs; do : > "$AKHOME/bs_patches/$f.p"; done
+            use_patch=; target_sha1=
+            pick_manager; echo "rc=$? patch=$(basename "$use_patch" 2>/dev/null) sha=$target_sha1"
+        """)
+
+    def run_menu(self, keys: list[int]):
+        body = 'AKHOME="$PWD"\n' + self.menu_body()
+        return self.run_helpers(body, keys)
+
+    def test_first_manager_with_susfs(self):
+        result = self.run_menu([42, 42, 42, 42])
+        self.assertIn("rc=0 patch=ksu-susfs.p sha=sha-ksu-s", result.stdout)
+
+    def test_second_manager_has_no_susfs_question(self):
+        # next has "-" as its SUSFS sha, so after choosing it no SUSFS question is asked
+        result = self.run_menu([41, 41, 42, 42])
+        self.assertIn("rc=0 patch=next.p sha=sha-next", result.stdout)
+        self.assertNotIn("Add SUSFS on top of KernelSU-Next", result.stdout)
+
+    def test_third_manager_without_susfs(self):
+        result = self.run_menu([41, 41, 41, 41, 42, 42, 41, 41])
+        self.assertIn("rc=0 patch=nova.p sha=sha-nova", result.stdout)
+
+    def test_no_to_every_manager_keeps_the_plain_kernel(self):
+        result = self.run_menu([41, 41, 41, 41, 41, 41])
+        self.assertIn("rc=1 patch= sha=", result.stdout)
+
+    def test_a_missing_patch_file_skips_that_manager(self):
+        body = 'AKHOME="$PWD"\n' + self.menu_body().replace("for f in ksu ksu-susfs next nova nova-susfs", "for f in next")
+        result = self.run_helpers(body, [42, 42])
+        self.assertIn("rc=0 patch=next.p", result.stdout)
+        self.assertNotIn("Install the kernel with KernelSU built in", result.stdout)
 
     def test_apply_patch_rejects_a_wrong_source_image(self):
         body = 'echo wrong > img; apply_patch img aaaa bbbb p.p; echo "not reached"'

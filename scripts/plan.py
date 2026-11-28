@@ -279,7 +279,14 @@ def write_plan(args: argparse.Namespace) -> None:
     entry = source_entry(args.kernel_source, args)
     susfs = truthy(args.susfs)
     nomount = truthy(args.nomount)
-    manager = resolve_manager(args.manager, susfs, args.manager_ref)
+    managers, picked_all = parse_managers(args.manager)
+    if picked_all:
+        die("manager=all is expanded by the matrix job. Pass one manager, or a list with build_scope=image-menu.")
+    if len(managers) > 1 and args.build_scope != "image-menu":
+        die("A manager list needs build_scope=image-menu. Otherwise every manager is its own job.")
+    # Resolve all of them now, so a blocked or unknown one stops the run before any download.
+    resolved = [resolve_manager(name, susfs, args.manager_ref) for name in managers]
+    manager = resolved[0]
     mode = entry.get("defconfig_mode", "auto")
     toolchain, toolchain_entry = resolve_toolchain(args.toolchain, args.toolchain_url, args.toolchain_sha256, entry)
     if args.lto not in {"none", "thin", "full"}:
@@ -351,6 +358,8 @@ def write_plan(args: argparse.Namespace) -> None:
     if fetch == "manifest" and args.source_ref.strip() and args.kernel_source == "custom":
         values["MANIFEST_REF"] = args.source_ref.strip()
     values.update(manager)
+    values["MANAGER_LIST"] = " ".join(managers)
+    values["SUSFS_REQUESTED"] = "true" if susfs else "false"
     for key, value in values.items():
         require_single_line(str(value), key)
 
@@ -604,13 +613,26 @@ def emit_matrix(args: argparse.Namespace) -> None:
         selected = {entry.get("toolchain") or global_default for entry in selected_entries}
         if len(selected) > 1:
             print("::warning::toolchain_sha256 is shared by all source builds while toolchain=auto selects different source-specific compilers; use one toolchain_url/fixed toolchain or leave the shared checksum empty", file=sys.stderr)
-    include = [{"source": source, "manager": manager} for source in sources for manager in managers]
+    if getattr(args, "build_scope", "image-only") == "image-menu":
+        # One runner builds every manager of a source and ships them in a single menu ZIP.
+        include = [{"source": source, "manager": ",".join(managers)} for source in sources]
+    else:
+        include = [{"source": source, "manager": manager} for source in sources for manager in managers]
     payload = json.dumps({"include": include}, separators=(",", ":"))
     if args.github_output:
         delimiter = "MATRIX_JSON"
         with open(args.github_output, "a", encoding="utf-8") as handle:
             handle.write(f"matrix<<{delimiter}\n{payload}\n{delimiter}\n")
     print(payload)
+
+
+def write_manager_env(args: argparse.Namespace) -> None:
+    values = resolve_manager(args.manager, truthy(args.susfs), args.manager_ref)
+    for key, value in values.items():
+        require_single_line(str(value), key)
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text("\n".join(f"{key}={shlex.quote(str(value))}" for key, value in values.items()) + "\n", encoding="utf-8")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -669,6 +691,13 @@ def build_parser() -> argparse.ArgumentParser:
     matrix.add_argument("--susfs", default="true")
     matrix.add_argument("--github-output", default="")
     matrix.set_defaults(func=emit_matrix)
+
+    manager_env = sub.add_parser("manager-env")
+    manager_env.add_argument("--manager", required=True)
+    manager_env.add_argument("--susfs", default="true")
+    manager_env.add_argument("--manager-ref", default="")
+    manager_env.add_argument("--out", required=True)
+    manager_env.set_defaults(func=write_manager_env)
     return parser
 
 

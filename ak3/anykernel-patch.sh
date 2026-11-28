@@ -29,7 +29,7 @@ PATCH_VBMETA_FLAG=auto;
 # Kernel-only install: unpack the boot image but leave its ramdisk untouched.
 split_boot;
 
-# SHA1_STOCK, SHA1_KSU and SHA1_SUSFS are written by the builder.
+# SHA1_STOCK is written by the builder. bs_patches/managers.txt lists the menu entries.
 [ -f $AKHOME/bs_patches/sha1.env ] || abort "! Missing bs_patches/sha1.env";
 . $AKHOME/bs_patches/sha1.env;
 
@@ -55,12 +55,12 @@ ask_yes_no() {
   ui_print "# Vol+ = Yes, Vol- = No (no key in ${KEY_TIMEOUT}s = No).";
   while true; do
     # The first call reads the key press, the second one the key release.
-    timeout $KEY_TIMEOUT $BIN/keycheck; rc1=$?;
+    timeout $KEY_TIMEOUT $BIN/keycheck </dev/null; rc1=$?;
     case $rc1 in
       $KEYCODE_UP|$KEYCODE_DOWN) ;;
       *) ui_print "- No key pressed. Using No."; return 1;;
     esac;
-    timeout $KEY_TIMEOUT $BIN/keycheck; rc2=$?;
+    timeout $KEY_TIMEOUT $BIN/keycheck </dev/null; rc2=$?;
     [ "$rc1" = "$rc2" ] || continue;
     if [ "$rc2" = "$KEYCODE_UP" ]; then
       ui_print "- You chose Yes.";
@@ -81,6 +81,50 @@ apply_patch() {
   $BIN/hpatchz -f $img $patch $img.new >/dev/null 2>&1 || abort "! hpatchz failed on $(basename $patch).";
   mv -f $img.new $img;
   [ "$(sha1 $img)" = "$to" ] || abort "! Patched image checksum mismatch.";
+}
+
+# pick_manager: ask about each manager in bs_patches/managers.txt, in order.
+# Line format: key;display name;sha1 of the manager image;sha1 of the SUSFS image or -
+# The first Yes wins, then SUSFS is offered when a SUSFS patch exists for it.
+# Sets use_patch and target_sha1. Returns 1 when every answer was No.
+pick_manager() {
+  local key display sha_m sha_s;
+
+  [ -f $AKHOME/bs_patches/managers.txt ] || return 1;
+
+  # Show the exact manager variants that were packaged into this ZIP. The list
+  # is generated from successfully built variants, not from the global config.
+  ui_print " ";
+  ui_print "Manager variants included in this ZIP:";
+  while IFS=';' read -r key display sha_m sha_s; do
+    [ -n "$key" ] || continue;
+    if [ "$sha_s" != "-" ]; then
+      ui_print " - $display (SUSFS available)";
+    else
+      ui_print " - $display";
+    fi;
+  done < $AKHOME/bs_patches/managers.txt;
+  ui_print " - Stock (no root manager) is used if all are skipped.";
+  ui_print "Vol- skips to the next manager; Vol+ selects the current manager.";
+
+  while IFS=';' read -r key display sha_m sha_s; do
+    [ -n "$key" ] || continue;
+    [ -f $AKHOME/bs_patches/$key.p ] || continue;
+    if ask_yes_no \
+        "Install the kernel with $display built in?" \
+        "Vol- moves on. No to every choice installs the plain kernel."; then
+      use_patch=$AKHOME/bs_patches/$key.p;
+      target_sha1=$sha_m;
+      if [ "$sha_s" != "-" ] && [ -f $AKHOME/bs_patches/$key-susfs.p ] && ask_yes_no \
+          "Add SUSFS on top of $display?" \
+          "Vol- keeps $display without SUSFS."; then
+        use_patch=$AKHOME/bs_patches/$key-susfs.p;
+        target_sha1=$sha_s;
+      fi;
+      return 0;
+    fi;
+  done < $AKHOME/bs_patches/managers.txt;
+  return 1;
 }
 
 # Keep a copy of the current boot image before replacing it. Best effort: a
@@ -107,18 +151,7 @@ backup_current_boot() {
 
 use_patch=;
 target_sha1=;
-if [ -f $AKHOME/bs_patches/ksu.p ] && ask_yes_no \
-    "Install the kernel with KernelSU built in?" \
-    "Vol- installs the plain kernel without a root manager."; then
-  use_patch=$AKHOME/bs_patches/ksu.p;
-  target_sha1=$SHA1_KSU;
-  if [ -f $AKHOME/bs_patches/susfs.p ] && ask_yes_no \
-      "Add SUSFS on top of KernelSU?" \
-      "Vol- keeps KernelSU without SUSFS."; then
-    use_patch=$AKHOME/bs_patches/susfs.p;
-    target_sha1=$SHA1_SUSFS;
-  fi;
-fi;
+pick_manager || true;
 
 if [ "$use_patch" ]; then
   ui_print " ";

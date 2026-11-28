@@ -138,7 +138,10 @@ def validate() -> list[str]:
 
     workflow_path = ROOT / ".github" / "workflows" / "build.yml"
     workflow = workflow_path.read_text(encoding="utf-8")
+    advanced_workflow_path = ROOT / ".github" / "workflows" / "build-advanced.yml"
+    advanced_workflow = advanced_workflow_path.read_text(encoding="utf-8")
     require("workflow_dispatch:" in workflow and "jobs:" in workflow, "build.yml must define workflow_dispatch and jobs")
+    require("workflow_dispatch:" in advanced_workflow and "workflow_call:" in advanced_workflow and "jobs:" in advanced_workflow, "build-advanced.yml must define workflow_dispatch, workflow_call, and jobs")
     expected_choices = {
         "device": sorted(devices),
         "kernel_source": sorted([*sources.keys(), "custom"]),
@@ -154,23 +157,22 @@ def validate() -> list[str]:
             require(alias not in seen_names, f"Short name '{alias}' of manager '{key}' is already used")
             seen_names.add(alias)
     for input_name, expected in expected_choices.items():
-        actual = sorted(workflow_choice_options(workflow, input_name))
+        actual = sorted(workflow_choice_options(advanced_workflow, input_name))
         require(actual == expected, f"Workflow choice '{input_name}' mismatch. Expected {expected}, found {actual}")
 
     # GitHub rejects a workflow_dispatch with more than 25 inputs, and the whole workflow then fails to load.
-    dispatch_inputs = re.search(r"(?ms)^on:\n  workflow_dispatch:\n    inputs:\n(.*?)^(?=\S)", workflow)
+    dispatch_inputs = re.search(r"(?ms)^on:\n  workflow_dispatch:\n    inputs:\n(.*?)^  workflow_call:", advanced_workflow)
     require(dispatch_inputs is not None, "Cannot find the workflow_dispatch inputs in build.yml")
     input_count = len(re.findall(r"(?m)^      [A-Za-z_][A-Za-z0-9_]*:\s*$", dispatch_inputs.group(1)))
     require(input_count <= 25, f"build.yml declares {input_count} workflow_dispatch inputs; GitHub allows at most 25")
 
     required_inputs = {
         "kernel_name", "all_sources", "source_ref", "custom_repo", "custom_ref", "custom_fetch",
-        "custom_kernel_path", "manager_ref", "enable_susfs", "susfs_ref", "susfs_branch",
-        "enable_nomount", "nomount_ref", "toolchain_url", "toolchain_sha256", "lto",
-        "build_scope", "ccache", "draft_release",
+        "custom_kernel_path", "manager_ref", "enable_susfs", "enable_nomount", "advanced_overrides",
+        "lto", "build_scope", "ccache", "uname_hash", "uname_run_id", "draft_release",
     }
     for input_name in sorted(required_inputs):
-        workflow_choice_options(workflow, input_name)
+        workflow_choice_options(advanced_workflow, input_name)
 
     anykernel = (ROOT / "ak3" / "anykernel.sh").read_text(encoding="utf-8")
     for placeholder in ("__KERNEL_STRING__", "__DEVICE_NAME_1__", "__DEVICE_NAME_2__"):
