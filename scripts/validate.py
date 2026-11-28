@@ -168,9 +168,8 @@ def validate() -> list[str]:
 
     required_inputs = {
         "kernel_name", "all_sources", "source_ref", "custom_repo", "custom_ref", "custom_fetch",
-        "custom_kernel_path", "manager_ref", "enable_susfs", "susfs_ref", "susfs_branch",
-        "enable_nomount", "nomount_ref", "toolchain_url", "toolchain_sha256", "lto",
-        "build_scope", "ccache", "draft_release",
+        "custom_kernel_path", "manager_ref", "enable_susfs", "enable_nomount", "advanced_overrides",
+        "lto", "build_scope", "ccache", "uname_hash", "uname_run_id", "draft_release",
     }
     for input_name in sorted(required_inputs):
         workflow_choice_options(advanced_workflow, input_name)
