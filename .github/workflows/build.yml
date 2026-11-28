@@ -54,9 +54,9 @@ on:
         type: string
         default: ""
       manager:
-        description: "Root managers, comma separated: kernelsu, kernelsu-next, sukisu-nova, bakasu, kowsu, none, or all. Short names work too: ksu, ksunext, sukisu."
+        description: "Managers to build. Use a comma-separated list or all; with image-menu, every built manager becomes an AK3 installer choice."
         type: string
-        default: kernelsu
+        default: all
       manager_ref:
         description: "Override the manager branch, tag, or commit"
         type: string
@@ -108,9 +108,9 @@ on:
           - none
           - full
       build_scope:
-        description: "image-only flashes boot. full also builds in-tree modules, dtbs, and techpack. image-menu is image-only packaged as a stock Image plus ksu/susfs diffs with a Vol+/Vol- menu."
+        description: "image-menu packages stock plus the selected manager/SUSFS variants into one AK3 ZIP with a volume-key selection menu."
         type: choice
-        default: image-only
+        default: image-menu
         options:
           - image-only
           - full
