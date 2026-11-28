@@ -199,11 +199,11 @@ jobs:
                   value = ""
               if not isinstance(value, str):
                   raise SystemExit(f"::error::{key} must be a string.")
-              if any(ch in value for ch in ("\\x00", "\\n", "\\r")):
+              if any(ch in value for ch in ("\x00", "\n", "\r")):
                   raise SystemExit(f"::error::{key} must be a single-line string.")
               lines.append(key.upper() + "=" + value)
           with Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8") as env_file:
-              env_file.write("\\n".join(lines) + "\\n")
+              env_file.write("\n".join(lines) + "\n")
           print("Selected managers: " + ", ".join(selected))
           PY
 
