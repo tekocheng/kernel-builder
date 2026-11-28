@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+MANAGER_FIELDS = {"aliases", "display", "repo", "ref", "setup", "susfs", "susfs_ref", "notes"}
 
 
 class ValidationError(Exception):
@@ -45,6 +46,13 @@ def read_env(path: Path) -> dict[str, str]:
         require(not any(c in value for c in "\x00\n\r\t"), f"Control character in {key} at {path.relative_to(ROOT)}:{number}")
         values[key] = value
     return values
+
+
+def section_inputs(text: str, section: str, label: str) -> list[str]:
+    """Names of the inputs declared under `on.<section>` (workflow_dispatch or workflow_call)."""
+    match = re.search(rf"(?ms)^  {section}:\n    inputs:\n(.*?)(?=^ {{0,4}}\S|\Z)", text)
+    require(match is not None, f"{label} must declare {section} inputs")
+    return re.findall(r"(?m)^      ([A-Za-z_][A-Za-z0-9_]*):\s*$", match.group(1))
 
 
 def workflow_choice_options(text: str, input_name: str) -> list[str]:
@@ -109,6 +117,8 @@ def validate() -> list[str]:
     for key, manager in managers.items():
         require(bool(re.fullmatch(r"[a-z0-9][a-z0-9-]*", key)), f"Invalid manager key: {key}")
         require(bool(manager.get("display")), f"Manager '{key}' needs display")
+        unknown_fields = sorted(set(manager) - MANAGER_FIELDS)
+        require(not unknown_fields, f"Manager '{key}' has unknown fields {unknown_fields}; known fields are {sorted(MANAGER_FIELDS)}")
         if key == "none":
             continue
         for field in ("repo", "ref", "setup"):
@@ -160,11 +170,33 @@ def validate() -> list[str]:
         actual = sorted(workflow_choice_options(advanced_workflow, input_name))
         require(actual == expected, f"Workflow choice '{input_name}' mismatch. Expected {expected}, found {actual}")
 
+    # The simple menu lists the same choices, except that it has no "custom" source.
+    simple_choices = {**expected_choices, "kernel_source": sorted(sources.keys())}
+    for input_name in ("device", "kernel_source", "toolchain", "lto", "build_scope"):
+        actual = sorted(workflow_choice_options(workflow, input_name))
+        require(
+            actual == simple_choices[input_name],
+            f"build.yml choice '{input_name}' mismatch. Expected {simple_choices[input_name]}, found {actual}",
+        )
+
     # GitHub rejects a workflow_dispatch with more than 25 inputs, and the whole workflow then fails to load.
-    dispatch_inputs = re.search(r"(?ms)^on:\n  workflow_dispatch:\n    inputs:\n(.*?)^  workflow_call:", advanced_workflow)
-    require(dispatch_inputs is not None, "Cannot find the workflow_dispatch inputs in build.yml")
-    input_count = len(re.findall(r"(?m)^      [A-Za-z_][A-Za-z0-9_]*:\s*$", dispatch_inputs.group(1)))
-    require(input_count <= 25, f"build.yml declares {input_count} workflow_dispatch inputs; GitHub allows at most 25")
+    simple_inputs = section_inputs(workflow, "workflow_dispatch", "build.yml")
+    advanced_inputs = section_inputs(advanced_workflow, "workflow_dispatch", "build-advanced.yml")
+    for label, names in (("build.yml", simple_inputs), ("build-advanced.yml", advanced_inputs)):
+        require(len(names) <= 25, f"{label} declares {len(names)} workflow_dispatch inputs; GitHub allows at most 25")
+
+    # build.yml only forwards its inputs to build-advanced.yml, so a mistake here is silent or breaks loading.
+    forwarded = re.search(r"(?ms)^    with:\n(.*?)(?=^ {0,4}\S|\Z)", workflow)
+    require(forwarded is not None, "build.yml must pass its inputs to build-advanced.yml with a 'with:' block")
+    passed = re.findall(r"(?m)^      ([A-Za-z_][A-Za-z0-9_]*):", forwarded.group(1))
+    callable_inputs = section_inputs(advanced_workflow, "workflow_call", "build-advanced.yml")
+    unknown = sorted(set(passed) - set(callable_inputs))
+    require(not unknown, f"build.yml passes inputs that build-advanced.yml does not declare for workflow_call: {unknown}")
+    used = set(re.findall(r"\binputs\.([A-Za-z_][A-Za-z0-9_]*)", forwarded.group(1)))
+    missing = sorted(used - set(simple_inputs))
+    require(not missing, f"build.yml forwards inputs it does not declare: {missing}")
+    dead = sorted(set(simple_inputs) - used)
+    require(not dead, f"build.yml declares inputs that are never forwarded to build-advanced.yml: {dead}")
 
     required_inputs = {
         "kernel_name", "all_sources", "source_ref", "custom_repo", "custom_ref", "custom_fetch",
@@ -202,7 +234,8 @@ def validate() -> list[str]:
 
     return [
         f"Validated {len(sources)} kernel sources, {len(managers)} managers, {len(toolchains)} toolchains, and {len(devices)} device(s).",
-        "Workflow dropdown choices match the configuration files.",
+        "Workflow dropdown choices match the configuration files (build.yml and build-advanced.yml).",
+        "build.yml forwards every one of its inputs to build-advanced.yml.",
         "Source, manager, toolchain, device, and AnyKernel template checks passed.",
     ]
 

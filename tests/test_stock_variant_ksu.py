@@ -14,9 +14,10 @@ def make_kernel() -> str:
 
 
 class StockVariantHasNoKsuTests(unittest.TestCase):
-    """The image-menu stock variant bootstraps a manager's Kconfig, and that
-    Kconfig says `config KSU ... default y`. Without an explicit -d KSU the
-    stock Image contains KernelSU and equals the plain KernelSU Image."""
+    """The image-menu stock variant bootstraps a manager's Kconfig. If that
+    Kconfig enables KSU by default, olddefconfig turns it on unless -d KSU is
+    written explicitly, and the stock Image then equals the plain KernelSU
+    Image."""
 
     def test_build_without_manager_turns_ksu_off_explicitly(self):
         body = make_kernel()

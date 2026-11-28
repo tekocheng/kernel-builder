@@ -87,8 +87,6 @@ def main() -> None:
         "display": env.get("MANAGER_DISPLAY", ""),
         "repository": env.get("MANAGER_REPO", ""),
         "requested_revision": env.get("MANAGER_REF", ""),
-        "effective_repository": env.get("MANAGER_EFFECTIVE_REPO", env.get("MANAGER_REPO", "")),
-        "effective_revision": env.get("MANAGER_EFFECTIVE_REF", env.get("MANAGER_REF", "")),
         "commit": read_text(release, "manager-commit.txt", "unknown"),
         "setup_script_sha256": read_text(release, "manager-setup.sha256", ""),
     }
@@ -168,7 +166,6 @@ def main() -> None:
         f"kernel/manifest: {kernel_repository} @ {kernel_revision}",
         f"kernel_commit: {source['commit']}",
         f"manager: {manager['display']} {manager['repository']}@{manager['requested_revision']}",
-        f"manager_effective: {manager['effective_repository']}@{manager['effective_revision']}",
         f"manager_commit: {manager['commit']}",
         f"manager_setup_sha256: {manager['setup_script_sha256'] or 'n/a'}",
         f"susfs: {features['susfs']} {features['susfs_branch']} {features['susfs_requested_revision']} {features['susfs_version']}",

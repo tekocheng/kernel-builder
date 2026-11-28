@@ -33,10 +33,6 @@ on:
         description: "SukiSU Nova"
         type: boolean
         default: false
-      build_kowsu:
-        description: "KOWSU (requires SUSFS disabled)"
-        type: boolean
-        default: false
       build_bakasu:
         description: "BakaSU"
         type: boolean
@@ -100,7 +96,6 @@ jobs:
       build_kernelsu: ${{ inputs.build_kernelsu }}
       build_kernelsu_next: ${{ inputs.build_kernelsu_next }}
       build_sukisu_nova: ${{ inputs.build_sukisu_nova }}
-      build_kowsu: ${{ inputs.build_kowsu }}
       build_bakasu: ${{ inputs.build_bakasu }}
       manager_ref: ""
       enable_susfs: ${{ inputs.enable_susfs }}
