@@ -637,8 +637,8 @@ make_kernel() {
     ( cd "${KERNEL_DIR}" && "${cfg[@]}" -e KSU )
   else
     # Manager Kconfig can be present without a manager (image-menu bootstraps it for the stock variant).
-    # Upstream declares "config KSU ... default y", so olddefconfig would switch it on by itself and
-    # compile drivers/kernelsu into the stock Image. Write the choice down explicitly.
+    # If that Kconfig enables KSU by default, olddefconfig switches it on by itself and drivers/kernelsu
+    # is compiled into the stock Image (seen in CI). Write the choice down explicitly.
     ( cd "${KERNEL_DIR}" && "${cfg[@]}" -d KSU ) || true
   fi
   if [[ "${ENABLE_SUSFS}" == "true" ]]; then
