@@ -53,34 +53,38 @@ on:
         description: "custom source only. Kernel path inside the tree. Empty uses the default."
         type: string
         default: ""
-      manager:
-        description: "Managers to build. Enter one manager or a comma-separated selection (e.g. kernelsu,kernelsu-next,sukisu-nova); use all only to build every compatible manager."
-        type: string
-        default: kernelsu
+      build_kernelsu:
+        description: "Build official KernelSU (tiann)"
+        type: boolean
+        default: true
+      build_kernelsu_next:
+        description: "Build KernelSU-Next"
+        type: boolean
+        default: false
+      build_sukisu_nova:
+        description: "Build SukiSU Nova"
+        type: boolean
+        default: false
+      build_kowsu:
+        description: "Build KOWSU (SUSFS is not supported)"
+        type: boolean
+        default: false
+      build_bakasu:
+        description: "Build BakaSU"
+        type: boolean
+        default: false
       manager_ref:
-        description: "Override the manager branch, tag, or commit"
+        description: "Override the manager branch, tag, or commit for all selected managers"
         type: string
         default: ""
       enable_susfs:
         description: "Apply SUSFS from gitlab simonpunk/susfs4ksu. Official KernelSU is patched from that tree."
         type: boolean
         default: true
-      susfs_ref:
-        description: "SUSFS commit or tag. Empty uses the branch tip."
-        type: string
-        default: ""
-      susfs_branch:
-        description: "SUSFS branch. Empty uses the device default (marble: gki-android12-5.10)."
-        type: string
-        default: ""
       enable_nomount:
         description: "Include NoMount VFS redirection in the kernel image"
         type: boolean
         default: false
-      nomount_ref:
-        description: "NoMount branch or tag. Empty uses dev."
-        type: string
-        default: ""
       toolchain:
         description: "auto follows the source preset"
         type: choice
@@ -91,14 +95,10 @@ on:
           - llvm-23.1.6
           - llvm-slim-23.1.6
           - alchemist-llvm-23
-      toolchain_url:
-        description: "Optional https link to a clang archive (tar.gz, tar.xz). Overrides toolchain for this run only."
+      advanced_overrides:
+        description: 'Optional JSON overrides: susfs_ref, susfs_branch, nomount_ref, toolchain_url, toolchain_sha256. Example: {"susfs_branch":"gki-android12-5.10"}'
         type: string
-        default: ""
-      toolchain_sha256:
-        description: "Optional expected SHA-256 for toolchain_url or a configured toolchain archive."
-        type: string
-        default: ""
+        default: "{}"
       lto:
         description: "thin is the safe default. full needs about 30 GB of RAM plus swap and is slow on hosted runners."
         type: choice
@@ -155,6 +155,58 @@ jobs:
           python3 -m unittest discover -s tests -v
           bash -n scripts/build.sh
 
+      - name: Normalize manager selections and advanced overrides
+        env:
+          BUILD_KERNELSU: ${{ inputs.build_kernelsu }}
+          BUILD_KERNELSU_NEXT: ${{ inputs.build_kernelsu_next }}
+          BUILD_SUKISU_NOVA: ${{ inputs.build_sukisu_nova }}
+          BUILD_KOWSU: ${{ inputs.build_kowsu }}
+          BUILD_BAKASU: ${{ inputs.build_bakasu }}
+          ADVANCED_OVERRIDES: ${{ inputs.advanced_overrides }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          managers = [
+              ("BUILD_KERNELSU", "kernelsu"),
+              ("BUILD_KERNELSU_NEXT", "kernelsu-next"),
+              ("BUILD_SUKISU_NOVA", "sukisu-nova"),
+              ("BUILD_KOWSU", "kowsu"),
+              ("BUILD_BAKASU", "bakasu"),
+          ]
+          selected = [key for env, key in managers if os.environ.get(env, "").lower() == "true"]
+          if not selected:
+              raise SystemExit("::error::Select at least one KernelSU manager checkbox.")
+
+          raw = os.environ.get("ADVANCED_OVERRIDES", "").strip() or "{}"
+          try:
+              overrides = json.loads(raw)
+          except json.JSONDecodeError as exc:
+              raise SystemExit(f"::error::advanced_overrides is not valid JSON: {exc}")
+          allowed = {"susfs_ref", "susfs_branch", "nomount_ref", "toolchain_url", "toolchain_sha256"}
+          if not isinstance(overrides, dict):
+              raise SystemExit("::error::advanced_overrides must be a JSON object.")
+          unknown = sorted(set(overrides) - allowed)
+          if unknown:
+              raise SystemExit("::error::Unsupported advanced_overrides keys: " + ", ".join(unknown))
+
+          lines = ["MANAGER=" + ",".join(selected)]
+          for key in sorted(allowed):
+              value = overrides.get(key, "")
+              if value is None:
+                  value = ""
+              if not isinstance(value, str):
+                  raise SystemExit(f"::error::{key} must be a string.")
+              if any(ch in value for ch in ("\\x00", "\\n", "\\r")):
+                  raise SystemExit(f"::error::{key} must be a single-line string.")
+              lines.append(key.upper() + "=" + value)
+          with Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8") as env_file:
+              env_file.write("\\n".join(lines) + "\\n")
+          print("Selected managers: " + ", ".join(selected))
+          PY
+
       - name: Expand source and manager matrix
         id: gen
         env:
@@ -166,11 +218,8 @@ jobs:
           CUSTOM_REPO: ${{ inputs.custom_repo }}
           CUSTOM_REF: ${{ inputs.custom_ref }}
           CUSTOM_FETCH: ${{ inputs.custom_fetch }}
-          MANAGER: ${{ inputs.manager }}
           MANAGER_REF: ${{ inputs.manager_ref }}
           TOOLCHAIN: ${{ inputs.toolchain }}
-          TOOLCHAIN_URL: ${{ inputs.toolchain_url }}
-          TOOLCHAIN_SHA256: ${{ inputs.toolchain_sha256 }}
           BUILD_SCOPE: ${{ inputs.build_scope }}
           ENABLE_SUSFS: ${{ inputs.enable_susfs }}
         run: bash scripts/build.sh
@@ -197,8 +246,10 @@ jobs:
 
       - name: Prepare toolchain cache identity
         env:
-          TOOLCHAIN_URL: ${{ inputs.toolchain_url }}
-          TOOLCHAIN_SHA256: ${{ inputs.toolchain_sha256 }}
+          TOOLCHAIN_URL: ${{ fromJSON(inputs.advanced_overrides || '{}').toolchain_url || '' }}
+          TOOLCHAIN_SHA256: ${{ fromJSON(inputs.advanced_overrides || '{}').toolchain_sha256 || '' }}
+        run: |
+          printf '%s\\n%s\\n' "$TOOLCHAIN_URL" "$TOOLCHAIN_SHA256" > .toolchain-cache-key
         run: |
           printf '%s\n%s\n' "$TOOLCHAIN_URL" "$TOOLCHAIN_SHA256" > .toolchain-cache-key
 
@@ -227,13 +278,13 @@ jobs:
           MANAGER: ${{ matrix.manager }}
           MANAGER_REF: ${{ inputs.manager_ref }}
           ENABLE_SUSFS: ${{ inputs.enable_susfs }}
-          SUSFS_REF: ${{ inputs.susfs_ref }}
-          SUSFS_BRANCH: ${{ inputs.susfs_branch }}
+          SUSFS_REF: ${{ fromJSON(inputs.advanced_overrides || '{}').susfs_ref || '' }}
+          SUSFS_BRANCH: ${{ fromJSON(inputs.advanced_overrides || '{}').susfs_branch || '' }}
           ENABLE_NOMOUNT: ${{ inputs.enable_nomount }}
-          NOMOUNT_REF: ${{ inputs.nomount_ref }}
+          NOMOUNT_REF: ${{ fromJSON(inputs.advanced_overrides || '{}').nomount_ref || '' }}
           TOOLCHAIN: ${{ inputs.toolchain }}
-          TOOLCHAIN_URL: ${{ inputs.toolchain_url }}
-          TOOLCHAIN_SHA256: ${{ inputs.toolchain_sha256 }}
+          TOOLCHAIN_URL: ${{ fromJSON(inputs.advanced_overrides || '{}').toolchain_url || '' }}
+          TOOLCHAIN_SHA256: ${{ fromJSON(inputs.advanced_overrides || '{}').toolchain_sha256 || '' }}
           LTO: ${{ inputs.lto }}
           BUILD_SCOPE: ${{ inputs.build_scope }}
           USE_CCACHE: ${{ inputs.ccache }}
