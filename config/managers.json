@@ -18,13 +18,11 @@
   "kernelsu-next": {
     "aliases": ["ksunext", "next"],
     "display": "KernelSU-Next",
-    "repo": "KernelSU-Next/KernelSU-Next",
-    "ref": "dev",
+    "repo": "pershoot/KernelSU-Next",
+    "ref": "dev-susfs",
     "setup": "kernel/setup.sh",
     "susfs": true,
-    "susfs_fallback_repo": "pershoot/KernelSU-Next",
-    "susfs_fallback_ref": "dev-susfs",
-    "notes": "Official dev first. If that tree still has no KSU_SUSFS and the official patch does not apply, fall back to pershoot dev-susfs."
+    "notes": "Always built from pershoot's dev-susfs fork. That branch already carries manager-side KSU_SUSFS, so the official SUSFS patch is not needed (it did not apply to KernelSU-Next's own dev)."
   },
   "sukisu-nova": {
     "aliases": ["sukisu", "suki", "nova"],

@@ -643,8 +643,9 @@ make_kernel() {
   fi
   if [[ "${ENABLE_SUSFS}" == "true" ]]; then
     ( cd "${KERNEL_DIR}" && "${cfg[@]}" -e KSU_SUSFS )
-  elif [[ "${AK3_STYLE}" == "patch-menu" ]]; then
-    # Managers that carry KSU_SUSFS themselves must not turn it on in the plain KernelSU variant.
+  else
+    # Managers that carry KSU_SUSFS themselves (KernelSU-Next, SukiSU Nova, BakaSU) must not turn it on
+    # when SUSFS was not requested: the kernel-side SUSFS code is not in that tree.
     ( cd "${KERNEL_DIR}" && "${cfg[@]}" -d KSU_SUSFS ) || true
   fi
   if [[ "${BUILTIN_NOMOUNT}" == "true" ]]; then

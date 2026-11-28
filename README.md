@@ -57,7 +57,7 @@ The values below match the inputs declared in `.github/workflows/build-advanced.
 | `custom_fetch` | `git` (default), `manifest` | Selects how the custom source is fetched. |
 | `custom_kernel_path` | Text / empty | Optional path to the kernel tree inside the fetched repository/manifest. Defaults to `.` for Git and `kernel_platform/xiaomi/sm8450` for a custom manifest. |
 | `build_kernelsu` | `true` (default) / `false` | Build official KernelSU (tiann). |
-| `build_kernelsu_next` | `false` (default) / `true` | Build KernelSU-Next. |
+| `build_kernelsu_next` | `false` (default) / `true` | Build KernelSU-Next, from the `pershoot/KernelSU-Next` `dev-susfs` fork. |
 | `build_sukisu_nova` | `false` (default) / `true` | Build SukiSU Nova. |
 | `build_kowsu` | `false` (default) / `true` | Build KOWSU. With SUSFS enabled, this is rejected because the current fork-specific patch is incompatible. |
 | `build_bakasu` | `false` (default) / `true` | Build BakaSU. Select at least one manager. |
@@ -141,7 +141,7 @@ Manager definitions are stored in [`config/managers.json`](config/managers.json)
 | Key | Manager | Configured source |
 |---|---|---|
 | `kernelsu` | Official KernelSU | [tiann/KernelSU](https://github.com/tiann/KernelSU), `main` |
-| `kernelsu-next` | KernelSU-Next | [KernelSU-Next/KernelSU-Next](https://github.com/KernelSU-Next/KernelSU-Next), `dev` |
+| `kernelsu-next` | KernelSU-Next | [pershoot/KernelSU-Next](https://github.com/pershoot/KernelSU-Next), `dev-susfs` |
 | `sukisu-nova` | SukiSU Nova | [SukiSU-Nova/SukiSU-Nova](https://github.com/SukiSU-Nova/SukiSU-Nova), `main` |
 | `bakasu` | BakaSU | [Baka-SU/BakaSU](https://github.com/Baka-SU/BakaSU), `main` |
 | `kowsu` | KOWSU | [KOWX712/KernelSU](https://github.com/KOWX712/KernelSU), `master`. Builds without SUSFS only: the official SUSFS patch does not apply to this fork, so `enable_susfs=true` stops the run in the Plan job (and the matrix planner skips it with a warning when expanding all managers). |
@@ -155,7 +155,7 @@ The current workflow has **no `ksu_mode` input and no KernelSU LKM packaging ste
 ### Manager-specific SUSFS handling
 
 - **Official KernelSU:** when its Kconfig does not already define `KSU_SUSFS`, the builder applies `10_enable_susfs_for_ksu.patch` from the selected SUSFS checkout.
-- **KernelSU-Next:** it tries the configured official tree first. If the manager-side SUSFS patch cannot be applied, it can fall back to `pershoot/KernelSU-Next` at `dev-susfs`.
+- **KernelSU-Next:** it is always built from `pershoot/KernelSU-Next` at `dev-susfs`, which already provides `KSU_SUSFS`, so the manager-side patch is skipped. Without SUSFS the build switches `KSU_SUSFS` off explicitly. The fork's build log lists two allowed manager signatures where KernelSU-Next's own `dev` listed one.
 - **SukiSU Nova:** its manager entry sets `susfs_ref` to `builtin`; when SUSFS is enabled and no `manager_ref` override is supplied, that branch is selected.
 - **BakaSU:** its configured tree is expected to provide `KSU_SUSFS` already; the builder skips the manager-side patch when that Kconfig option exists.
 
@@ -345,7 +345,7 @@ Optional manager fields:
 - `susfs`: set to `true` only when the manager tree supports the required SUSFS integration.
 - `susfs_ref`: alternate manager ref used by default when SUSFS is enabled, unless `manager_ref` overrides it.
 - `susfs_blocked`: reason text. When set, `enable_susfs=true` is refused for this manager before any build starts, and the matrix planner leaves it out when expanding all managers.
-- `susfs_fallback_repo` and `susfs_fallback_ref`: fallback manager source/ref used by the KernelSU-Next SUSFS path when the primary manager-side patch cannot be applied.
+- `susfs_fallback_repo` and `susfs_fallback_ref`: fallback manager source/ref tried when the primary manager-side SUSFS patch cannot be applied. No manager in the current `config/managers.json` uses it.
 
 There is no generic LKM build recipe or `lkm` manager flag in the current builder.
 
@@ -417,7 +417,7 @@ This repository coordinates and automates the work of the projects below. Credit
 **Root managers and patches**
 
 - [tiann/KernelSU](https://github.com/tiann/KernelSU): official KernelSU.
-- [KernelSU-Next](https://github.com/KernelSU-Next/KernelSU-Next) and [pershoot/KernelSU-Next](https://github.com/pershoot/KernelSU-Next): KernelSU-Next and the configured `dev-susfs` fallback.
+- [pershoot/KernelSU-Next](https://github.com/pershoot/KernelSU-Next), a fork of [KernelSU-Next](https://github.com/KernelSU-Next/KernelSU-Next): the configured `dev-susfs` branch.
 - [SukiSU Nova](https://github.com/SukiSU-Nova/SukiSU-Nova) and [BakaSU](https://github.com/Baka-SU/BakaSU).
 - [simonpunk/susfs4ksu](https://gitlab.com/simonpunk/susfs4ksu): SUSFS kernel and manager patches.
 - [maxsteeel/nomount](https://github.com/maxsteeel/nomount): NoMount integration.
