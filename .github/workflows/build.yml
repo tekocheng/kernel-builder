@@ -4,17 +4,13 @@ on:
   workflow_dispatch:
     inputs:
       device:
-        description: "Device. Add a config/devices/<name>.env file, then add the name here."
+        description: "Target device"
         type: choice
         default: marble
         options:
           - marble
-      kernel_name:
-        description: "Custom kernel name (CONFIG_LOCALVERSION). Empty uses the device/tree default."
-        type: string
-        default: ""
       kernel_source:
-        description: "Kernel source. Matches a key in config/sources.json, or custom."
+        description: "Kernel source / ROM base"
         type: choice
         default: aospa
         options:
@@ -25,68 +21,36 @@ on:
           - lunaris
           - melt
           - bouquet
-          - custom
-      all_sources:
-        description: "Build every source in config/sources.json"
-        type: boolean
-        default: false
-      source_ref:
-        description: "Override the kernel branch, tag, or commit. Empty keeps the preset."
-        type: string
-        default: ""
-      custom_repo:
-        description: "custom source only. owner/name, or a manifest repo when custom_fetch=manifest"
-        type: string
-        default: ""
-      custom_ref:
-        description: "custom source only. Branch, tag, or commit"
-        type: string
-        default: ""
-      custom_fetch:
-        description: "custom source only"
-        type: choice
-        default: git
-        options:
-          - git
-          - manifest
-      custom_kernel_path:
-        description: "custom source only. Kernel path inside the tree. Empty uses the default."
-        type: string
-        default: ""
       build_kernelsu:
-        description: "Build official KernelSU (tiann)"
+        description: "Official KernelSU (tiann)"
         type: boolean
         default: true
       build_kernelsu_next:
-        description: "Build KernelSU-Next"
+        description: "KernelSU-Next"
         type: boolean
         default: false
       build_sukisu_nova:
-        description: "Build SukiSU Nova"
+        description: "SukiSU Nova"
         type: boolean
         default: false
       build_kowsu:
-        description: "Build KOWSU (SUSFS is not supported)"
+        description: "KOWSU (disable SUSFS for this manager)"
         type: boolean
         default: false
       build_bakasu:
-        description: "Build BakaSU"
+        description: "BakaSU"
         type: boolean
         default: false
-      manager_ref:
-        description: "Override the manager branch, tag, or commit for all selected managers"
-        type: string
-        default: ""
       enable_susfs:
-        description: "Apply SUSFS from gitlab simonpunk/susfs4ksu. Official KernelSU is patched from that tree."
+        description: "Enable SUSFS"
         type: boolean
         default: true
       enable_nomount:
-        description: "Include NoMount VFS redirection in the kernel image"
+        description: "Include NoMount in kernel image"
         type: boolean
         default: false
       toolchain:
-        description: "auto follows the source preset"
+        description: "Compiler toolchain"
         type: choice
         default: auto
         options:
@@ -95,12 +59,8 @@ on:
           - llvm-23.1.6
           - llvm-slim-23.1.6
           - alchemist-llvm-23
-      advanced_overrides:
-        description: 'Optional JSON overrides: susfs_ref, susfs_branch, nomount_ref, toolchain_url, toolchain_sha256. Example: {"susfs_branch":"gki-android12-5.10"}'
-        type: string
-        default: "{}"
       lto:
-        description: "thin is the safe default. full needs about 30 GB of RAM plus swap and is slow on hosted runners."
+        description: "Link-time optimization"
         type: choice
         default: thin
         options:
@@ -108,248 +68,48 @@ on:
           - none
           - full
       build_scope:
-        description: "image-menu packages stock plus the selected manager/SUSFS variants into one AK3 ZIP with a volume-key selection menu."
+        description: "Output/package mode"
         type: choice
         default: image-menu
         options:
           - image-only
           - full
           - image-menu
-      ccache:
-        description: "Reuse compiler cache between runs"
-        type: boolean
-        default: true
-      uname_hash:
-        description: "Add -g<kernel commit> to the kernel uname"
-        type: boolean
-        default: true
-      uname_run_id:
-        description: "Run id part of the kernel uname: auto = -ab<run id>, off or none = nothing, or your own text such as r35"
-        type: string
-        default: "auto"
       draft_release:
-        description: "Create a draft GitHub release with the zip files"
+        description: "Create a draft GitHub release"
         type: boolean
         default: false
 
 permissions:
-  contents: read
-
-concurrency:
-  group: build-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+  contents: write
 
 jobs:
-  matrix:
-    name: Plan
-    runs-on: ubuntu-24.04
-    outputs:
-      matrix: ${{ steps.gen.outputs.matrix }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Validate builder configuration and tests
-        run: |
-          python3 scripts/validate.py
-          python3 -m unittest discover -s tests -v
-          bash -n scripts/build.sh
-
-      - name: Normalize manager selections and advanced overrides
-        env:
-          BUILD_KERNELSU: ${{ inputs.build_kernelsu }}
-          BUILD_KERNELSU_NEXT: ${{ inputs.build_kernelsu_next }}
-          BUILD_SUKISU_NOVA: ${{ inputs.build_sukisu_nova }}
-          BUILD_KOWSU: ${{ inputs.build_kowsu }}
-          BUILD_BAKASU: ${{ inputs.build_bakasu }}
-          ADVANCED_OVERRIDES: ${{ inputs.advanced_overrides }}
-        run: |
-          python3 - <<'PY'
-          import json
-          import os
-          from pathlib import Path
-
-          managers = [
-              ("BUILD_KERNELSU", "kernelsu"),
-              ("BUILD_KERNELSU_NEXT", "kernelsu-next"),
-              ("BUILD_SUKISU_NOVA", "sukisu-nova"),
-              ("BUILD_KOWSU", "kowsu"),
-              ("BUILD_BAKASU", "bakasu"),
-          ]
-          selected = [key for env, key in managers if os.environ.get(env, "").lower() == "true"]
-          if not selected:
-              raise SystemExit("::error::Select at least one KernelSU manager checkbox.")
-
-          raw = os.environ.get("ADVANCED_OVERRIDES", "").strip() or "{}"
-          try:
-              overrides = json.loads(raw)
-          except json.JSONDecodeError as exc:
-              raise SystemExit(f"::error::advanced_overrides is not valid JSON: {exc}")
-          allowed = {"susfs_ref", "susfs_branch", "nomount_ref", "toolchain_url", "toolchain_sha256"}
-          if not isinstance(overrides, dict):
-              raise SystemExit("::error::advanced_overrides must be a JSON object.")
-          unknown = sorted(set(overrides) - allowed)
-          if unknown:
-              raise SystemExit("::error::Unsupported advanced_overrides keys: " + ", ".join(unknown))
-
-          lines = ["MANAGER=" + ",".join(selected)]
-          for key in sorted(allowed):
-              value = overrides.get(key, "")
-              if value is None:
-                  value = ""
-              if not isinstance(value, str):
-                  raise SystemExit(f"::error::{key} must be a string.")
-              if any(ch in value for ch in ("\x00", "\n", "\r")):
-                  raise SystemExit(f"::error::{key} must be a single-line string.")
-              lines.append(key.upper() + "=" + value)
-          with Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8") as env_file:
-              env_file.write("\n".join(lines) + "\n")
-          print("Selected managers: " + ", ".join(selected))
-          PY
-
-      - name: Expand source and manager matrix
-        id: gen
-        env:
-          MATRIX_ONLY: "1"
-          DEVICE: ${{ inputs.device }}
-          KERNEL_SOURCE: ${{ inputs.kernel_source }}
-          ALL_SOURCES: ${{ inputs.all_sources }}
-          SOURCE_REF: ${{ inputs.source_ref }}
-          CUSTOM_REPO: ${{ inputs.custom_repo }}
-          CUSTOM_REF: ${{ inputs.custom_ref }}
-          CUSTOM_FETCH: ${{ inputs.custom_fetch }}
-          MANAGER_REF: ${{ inputs.manager_ref }}
-          TOOLCHAIN: ${{ inputs.toolchain }}
-          BUILD_SCOPE: ${{ inputs.build_scope }}
-          ENABLE_SUSFS: ${{ inputs.enable_susfs }}
-        run: bash scripts/build.sh
-
   build:
-    name: ${{ matrix.source }} / ${{ matrix.manager }}
-    needs: matrix
-    runs-on: ubuntu-24.04
-    timeout-minutes: 300
-    strategy:
-      fail-fast: false
-      max-parallel: 2
-      matrix: ${{ fromJSON(needs.matrix.outputs.matrix) }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Configure runner resources
-        uses: ./.github/actions/runner-setup
-        with:
-          lto: ${{ inputs.lto }}
-          build_scope: ${{ inputs.build_scope }}
-          config: config/runner.json
-
-      - name: Prepare toolchain cache identity
-        env:
-          TOOLCHAIN_URL: ${{ fromJSON(inputs.advanced_overrides || '{}').toolchain_url || '' }}
-          TOOLCHAIN_SHA256: ${{ fromJSON(inputs.advanced_overrides || '{}').toolchain_sha256 || '' }}
-        run: |
-          printf '%s\n%s\n' "$TOOLCHAIN_URL" "$TOOLCHAIN_SHA256" > .toolchain-cache-key
-
-      - name: Restore toolchain and ccache
-        uses: actions/cache@v6
-        with:
-          path: |
-            toolchains
-            /home/runner/.ccache
-            /home/runner/.cache/thinlto
-          key: kernel-tools-v2-${{ runner.os }}-${{ inputs.toolchain }}-${{ hashFiles('.toolchain-cache-key', 'scripts/build.sh', 'scripts/plan.py', 'scripts/safe_extract.py', 'config/sources.json', 'config/toolchains.json') }}
-          restore-keys: |
-            kernel-tools-v2-${{ runner.os }}-${{ inputs.toolchain }}-
-            kernel-tools-v2-${{ runner.os }}-
-
-      - name: Build
-        env:
-          DEVICE: ${{ inputs.device }}
-          KERNEL_NAME: ${{ inputs.kernel_name }}
-          KERNEL_SOURCE: ${{ matrix.source }}
-          SOURCE_REF: ${{ inputs.source_ref }}
-          CUSTOM_REPO: ${{ inputs.custom_repo }}
-          CUSTOM_REF: ${{ inputs.custom_ref }}
-          CUSTOM_FETCH: ${{ inputs.custom_fetch }}
-          CUSTOM_KERNEL_PATH: ${{ inputs.custom_kernel_path }}
-          MANAGER: ${{ matrix.manager }}
-          MANAGER_REF: ${{ inputs.manager_ref }}
-          ENABLE_SUSFS: ${{ inputs.enable_susfs }}
-          SUSFS_REF: ${{ fromJSON(inputs.advanced_overrides || '{}').susfs_ref || '' }}
-          SUSFS_BRANCH: ${{ fromJSON(inputs.advanced_overrides || '{}').susfs_branch || '' }}
-          ENABLE_NOMOUNT: ${{ inputs.enable_nomount }}
-          NOMOUNT_REF: ${{ fromJSON(inputs.advanced_overrides || '{}').nomount_ref || '' }}
-          TOOLCHAIN: ${{ inputs.toolchain }}
-          TOOLCHAIN_URL: ${{ fromJSON(inputs.advanced_overrides || '{}').toolchain_url || '' }}
-          TOOLCHAIN_SHA256: ${{ fromJSON(inputs.advanced_overrides || '{}').toolchain_sha256 || '' }}
-          LTO: ${{ inputs.lto }}
-          BUILD_SCOPE: ${{ inputs.build_scope }}
-          USE_CCACHE: ${{ inputs.ccache }}
-          JOBS: "4"
-          USE_UNAME_HASH: ${{ inputs.uname_hash }}
-          USE_UNAME_RUN_ID: ${{ inputs.uname_run_id }}
-        run: bash scripts/build.sh
-
-      - name: Upload build outputs
-        if: always()
-        uses: actions/upload-artifact@v6
-        with:
-          name: ${{ inputs.device }}-${{ matrix.source }}-${{ matrix.manager }}-r${{ github.run_number }}
-          path: release/
-          if-no-files-found: warn
-          retention-days: 14
-
-      - name: Notify Telegram
-        if: always()
-        continue-on-error: true
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          SEND_ZIP: ${{ vars.TELEGRAM_SEND_ZIP }}
-          JOB_STATUS: ${{ job.status }}
-          DEVICE: ${{ inputs.device }}
-          SOURCE: ${{ matrix.source }}
-          MANAGER: ${{ matrix.manager }}
-          RUN_NUMBER: ${{ github.run_number }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: bash scripts/notify_telegram.sh
-
-  release:
-    name: Draft release
-    needs: build
-    if: ${{ inputs.draft_release && needs.build.result == 'success' }}
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ github.sha }}
-          persist-credentials: false
-
-      - name: Download zips
-        uses: actions/download-artifact@v6
-        with:
-          pattern: ${{ inputs.device }}-*-r${{ github.run_number }}
-          path: artifacts
-          merge-multiple: false
-
-      - name: Publish draft
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          mapfile -t files < <(find artifacts -type f \( -name '*.zip' -o -name '*.sha256' \))
-          if (( ${#files[@]} == 0 )); then
-            echo "::error::No zip files were produced"
-            exit 1
-          fi
-          tag="${{ inputs.device }}-r${GITHUB_RUN_NUMBER}"
-          gh release create "${tag}" "${files[@]}" \
-            --draft \
-            --target "${GITHUB_SHA}" \
-            --title "${{ inputs.device }} kernel r${GITHUB_RUN_NUMBER}" \
-            --notes "Draft from workflow run ${GITHUB_RUN_NUMBER}. Flash the zip that matches your ROM."
-
-            
+    name: Build (simple options)
+    uses: ./.github/workflows/build-advanced.yml
+    with:
+      device: ${{ inputs.device }}
+      kernel_name: ""
+      kernel_source: ${{ inputs.kernel_source }}
+      all_sources: false
+      source_ref: ""
+      custom_repo: ""
+      custom_ref: ""
+      custom_fetch: git
+      custom_kernel_path: ""
+      build_kernelsu: ${{ inputs.build_kernelsu }}
+      build_kernelsu_next: ${{ inputs.build_kernelsu_next }}
+      build_sukisu_nova: ${{ inputs.build_sukisu_nova }}
+      build_kowsu: ${{ inputs.build_kowsu }}
+      build_bakasu: ${{ inputs.build_bakasu }}
+      manager_ref: ""
+      enable_susfs: ${{ inputs.enable_susfs }}
+      enable_nomount: ${{ inputs.enable_nomount }}
+      toolchain: ${{ inputs.toolchain }}
+      advanced_overrides: "{}"
+      lto: ${{ inputs.lto }}
+      build_scope: ${{ inputs.build_scope }}
+      ccache: true
+      uname_hash: true
+      uname_run_id: auto
+      draft_release: ${{ inputs.draft_release }}
