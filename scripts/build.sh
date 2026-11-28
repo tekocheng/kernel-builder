@@ -899,8 +899,14 @@ build_patch_variants() {
     log "::warning::${#managers[@]} managers with lto=full means $(( 1 + 2 * ${#managers[@]} )) full-LTO links in one job; lto=thin is much safer on a 16 GB runner"
   fi
 
-  # NoMount is part of every variant, so it goes in first. Its setup only links fs/nomount and adds
-  # one line each to fs/Makefile and fs/Kconfig, which the SUSFS kernel patch does not depend on.
+  # This source's drivers/Kconfig includes drivers/kernelsu/Kconfig even when CONFIG_KSU is off.
+  # Bootstrap the first selected manager so that the Kconfig include exists for the stock defconfig.
+  # The stock .config still keeps CONFIG_KSU disabled; this is only a source-tree prerequisite.
+  load_manager "${managers[0]}"
+  log "Preparing manager Kconfig for the stock variant: ${MANAGER_DISPLAY}"
+  apply_manager
+
+  # NoMount is part of every variant, so it goes in before the stock build.
   apply_nomount
 
   log "Variant stock (no manager)"
@@ -909,6 +915,12 @@ build_patch_variants() {
   rm -f "${RELEASE}"/Image*
   make_kernel
   save_variant stock
+
+  # Remove the bootstrap manager and all temporary source changes before building menu variants.
+  # Reapply NoMount because reset_kernel_tree restores tracked files and removes untracked files.
+  log "Resetting the kernel tree after the stock variant"
+  reset_kernel_tree
+  apply_nomount
 
   # One manager after the other, each on a clean tree: manager only, then manager plus SUSFS.
   for key in "${managers[@]}"; do
