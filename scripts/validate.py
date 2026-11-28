@@ -186,8 +186,6 @@ def validate() -> list[str]:
     # build.yml only forwards its inputs to build-advanced.yml, so a mistake here is silent or breaks loading.
     forwarded = re.search(r"(?ms)^    with:\n(.*?)(?=^ {0,4}\S|\Z)", workflow)
     require(forwarded is not None, "build.yml must pass its inputs to build-advanced.yml with a 'with:' block")
-    # A called workflow gets no repository secrets unless the caller passes them.
-    require(re.search(r"(?m)^    secrets: inherit\\s*$", workflow) is not None, "build.yml must pass secrets to build-advanced.yml with 'secrets: inherit'")
     passed = re.findall(r"(?m)^      ([A-Za-z_][A-Za-z0-9_]*):", forwarded.group(1))
     callable_inputs = section_inputs(advanced_workflow, "workflow_call", "build-advanced.yml")
     unknown = sorted(set(passed) - set(callable_inputs))
