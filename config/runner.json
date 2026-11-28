@@ -1,0 +1,32 @@
+{
+  "disk_threshold_gib": 40,
+  "cleanup": {
+    "action": "endersonmenezes/free-disk-space@24d3e2af1fe79ccdde8844605337a8835e20d012",
+    "rm_cmd": "rmz",
+    "rmz_version": "3.2.0",
+    "testing": false,
+    "aggressive": {
+      "remove_android": true,
+      "remove_dotnet": true,
+      "remove_haskell": true,
+      "remove_tool_cache": true,
+      "remove_swap": false,
+      "remove_packages": "azure-cli google-cloud-cli microsoft-edge-stable google-chrome-stable firefox postgresql* temurin-* mysql* dotnet-sdk-*",
+      "remove_packages_one_command": true,
+      "remove_folders": "/usr/share/swift /usr/share/miniconda /usr/share/az* /usr/local/lib/node_modules /usr/local/share/chromium /usr/local/share/powershell /usr/local/julia /usr/local/aws-cli /usr/local/aws-sam-cli /usr/share/gradle"
+    },
+    "light": {
+      "remove_android": false,
+      "remove_dotnet": true,
+      "remove_haskell": true,
+      "remove_tool_cache": false,
+      "remove_swap": false
+    }
+  },
+  "swap": {
+    "action": "pierotofy/set-swap-space@fc79b3f67fa8a838184ce84a674ca12238d2c761",
+    "size_gb": 16,
+    "enabled_when_lto_not": "none",
+    "swappiness": 100
+  }
+}
