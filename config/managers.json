@@ -34,16 +34,6 @@
     "susfs": true,
     "notes": "SUSFS builds check out the builtin branch, which already carries manager-side KSU_SUSFS."
   },
-  "kowsu": {
-    "aliases": ["kow"],
-    "display": "KOWSU",
-    "repo": "KOWX712/KernelSU",
-    "ref": "master",
-    "setup": "kernel/setup.sh",
-    "susfs": true,
-    "susfs_blocked": "The official SUSFS manager patch does not apply to this fork: it changes sucompat.c, allowlist.c, boot_event.c and the supercall files that the patch edits. Use enable_susfs=false or another manager.",
-    "notes": "KOWX712's KernelSU fork (official KernelSU plus its own commits). Builds without SUSFS; SUSFS is blocked until a fork-specific patch exists."
-  },
   "bakasu": {
     "aliases": ["baka"],
     "display": "BakaSU",

@@ -1,4 +1,5 @@
 import importlib.util
+import json
 import shutil
 import tempfile
 import unittest
@@ -66,11 +67,19 @@ class WorkflowConsistencyTests(unittest.TestCase):
         self.assert_rejected("does not declare for workflow_call")
 
     def test_more_than_25_dispatch_inputs_are_rejected(self):
+        # More than the limit no matter how many inputs build.yml declares today.
         extra = "".join(
-            f"      extra_{n}:\n        type: boolean\n        default: false\n" for n in range(13)
+            f"      extra_{n}:\n        type: boolean\n        default: false\n" for n in range(26)
         )
         self.change_simple("\npermissions:\n", extra + "\npermissions:\n")
         self.assert_rejected("allows at most 25")
+
+    def test_a_manager_field_nothing_reads_is_rejected(self):
+        path = self.root / "config" / "managers.json"
+        managers = json.loads(path.read_text(encoding="utf-8"))
+        managers["kernelsu-next"]["susfs_fallback_repo"] = "owner/repo"
+        path.write_text(json.dumps(managers), encoding="utf-8")
+        self.assert_rejected("unknown fields ['susfs_fallback_repo']")
 
 
 if __name__ == "__main__":

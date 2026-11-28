@@ -39,8 +39,6 @@ class MetadataTests(unittest.TestCase):
                 "MANAGER_DISPLAY": "KernelSU",
                 "MANAGER_REPO": "tiann/KernelSU",
                 "MANAGER_REF": "main",
-                "MANAGER_EFFECTIVE_REPO": "pershoot/KernelSU-Next",
-                "MANAGER_EFFECTIVE_REF": "dev-susfs",
                 "ENABLE_SUSFS": "false",
                 "ENABLE_NOMOUNT": "false",
                 "TOOLCHAIN": "llvm-23.1.5",
@@ -53,8 +51,10 @@ class MetadataTests(unittest.TestCase):
             result = json.loads((release / "build-manifest.json").read_text(encoding="utf-8"))
             self.assertEqual(result["source"]["commit"], "abc123")
             self.assertEqual(result["manager"]["commit"], "def456")
-            self.assertEqual(result["manager"]["effective_repository"], "pershoot/KernelSU-Next")
-            self.assertEqual(result["manager"]["effective_revision"], "dev-susfs")
+            self.assertEqual(result["manager"]["repository"], "tiann/KernelSU")
+            self.assertEqual(result["manager"]["requested_revision"], "main")
+            self.assertNotIn("effective_repository", result["manager"])
+            self.assertNotIn("effective_revision", result["manager"])
             self.assertEqual(result["source"]["manifest_projects"][0]["path"], "kernel")
             info = (release / "build-info.txt").read_text(encoding="utf-8")
             self.assertIn("zip_sha256:", info)

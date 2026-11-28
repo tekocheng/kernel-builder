@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+MANAGER_FIELDS = {"aliases", "display", "repo", "ref", "setup", "susfs", "susfs_ref", "notes"}
 
 
 class ValidationError(Exception):
@@ -116,6 +117,8 @@ def validate() -> list[str]:
     for key, manager in managers.items():
         require(bool(re.fullmatch(r"[a-z0-9][a-z0-9-]*", key)), f"Invalid manager key: {key}")
         require(bool(manager.get("display")), f"Manager '{key}' needs display")
+        unknown_fields = sorted(set(manager) - MANAGER_FIELDS)
+        require(not unknown_fields, f"Manager '{key}' has unknown fields {unknown_fields}; known fields are {sorted(MANAGER_FIELDS)}")
         if key == "none":
             continue
         for field in ("repo", "ref", "setup"):

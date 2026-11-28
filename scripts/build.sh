@@ -64,7 +64,6 @@ if [[ -n "${GITHUB_OUTPUT:-}" && "${MATRIX_ONLY:-}" == "1" ]]; then
     --toolchain-sha256 "${TOOLCHAIN_SHA256}" \
     --all-sources "${ALL_SOURCES}" \
     --build-scope "${BUILD_SCOPE}" \
-    --susfs "${ENABLE_SUSFS}" \
     --github-output "${GITHUB_OUTPUT}"
   exit 0
 fi
@@ -120,13 +119,6 @@ case "${AK3_STYLE}" in
   kernel-only|patch-menu) ;;
   *) die "Bad AK3_STYLE '${AK3_STYLE}'. Use kernel-only or patch-menu." ;;
 esac
-MANAGER_EFFECTIVE_REPO="${MANAGER_REPO:-n/a}"
-MANAGER_EFFECTIVE_REF="${MANAGER_REF:-n/a}"
-if [[ "${MANAGER}" == "none" ]]; then
-  MANAGER_EFFECTIVE_REPO="n/a"
-  MANAGER_EFFECTIVE_REF="n/a"
-fi
-export MANAGER_EFFECTIVE_REPO MANAGER_EFFECTIVE_REF
 
 if [[ "${LTO}" == "full" ]]; then
   mem_kb="$(awk '/^(MemTotal|SwapTotal):/ {sum += $2} END {print sum + 0}' /proc/meminfo 2>/dev/null || echo 0)"
@@ -403,9 +395,6 @@ kconfig_path() {
 
 setup_manager_from() {
   local repo="$1" ref="$2"
-  MANAGER_EFFECTIVE_REPO="${repo}"
-  MANAGER_EFFECTIVE_REF="${ref}"
-  export MANAGER_EFFECTIVE_REPO MANAGER_EFFECTIVE_REF
   local url="https://raw.githubusercontent.com/${repo}/${ref}/${MANAGER_SETUP}"
   log "Manager setup ${repo} @ ${ref}"
   rm -rf "${KERNEL_DIR}/KernelSU" "${KERNEL_DIR}/KernelSU-Next" \
@@ -496,20 +485,8 @@ apply_susfs() {
   manager_root="$(dirname "$(dirname "${kconfig}")")"
   if ! grep -q '^config KSU_SUSFS$' "${kconfig}"; then
     local hook="${susfs_dir}/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch"
-    if ! apply_patch "${manager_root}" "${hook}"; then
-      if [[ -n "${MANAGER_SUSFS_FALLBACK_REPO}" ]]; then
-        log "::warning::Official SUSFS patch missed ${MANAGER_REPO}@${MANAGER_REF}; trying ${MANAGER_SUSFS_FALLBACK_REPO}@${MANAGER_SUSFS_FALLBACK_REF}"
-        rm -rf "${KERNEL_DIR}/KernelSU" "${KERNEL_DIR}/KernelSU-Next"
-        setup_manager_from "${MANAGER_SUSFS_FALLBACK_REPO}" "${MANAGER_SUSFS_FALLBACK_REF}"
-        kconfig="$(kconfig_path)" || die "Fallback manager setup failed"
-        manager_root="$(dirname "$(dirname "${kconfig}")")"
-        if ! grep -q '^config KSU_SUSFS$' "${kconfig}"; then
-          apply_patch "${manager_root}" "${hook}" || die "SUSFS manager patch does not apply on the fallback manager either. See the hunks above; pin manager_ref to a commit the patch fits."
-        fi
-      else
-        die "SUSFS manager patch does not apply on ${MANAGER_REPO}@${MANAGER_REF}. See the hunks above. A fork that changed the same files cannot take the official patch, and pinning an older fork commit will not help; use another manager or enable_susfs=false."
-      fi
-    fi
+    apply_patch "${manager_root}" "${hook}" \
+      || die "SUSFS manager patch does not apply on ${MANAGER_REPO}@${MANAGER_REF}. See the hunks above. A fork that changed the same files cannot take the official patch, and pinning an older fork commit will not help; use another manager or enable_susfs=false."
   else
     log "Manager already has KSU_SUSFS; skipping 10_enable_susfs_for_ksu.patch"
   fi
@@ -970,8 +947,6 @@ build_patch_variants() {
   MANAGER_DISPLAY="${joined_displays}"
   MANAGER_REPO=""
   MANAGER_REF=""
-  MANAGER_EFFECTIVE_REPO=""
-  MANAGER_EFFECTIVE_REF=""
   ENABLE_SUSFS="${any_susfs}"
   paste -sd, "${RELEASE}/manager-commits.txt" > "${RELEASE}/manager-commit.txt"
   # Keep the stock image as release/Image: it is the one inside the ZIP.

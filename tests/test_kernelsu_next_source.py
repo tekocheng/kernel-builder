@@ -27,10 +27,12 @@ class KernelSuNextUsesPershootTests(unittest.TestCase):
                 self.assertEqual(result["MANAGER_REF"], "dev-susfs")
                 self.assertEqual(result["ENABLE_SUSFS"], "true" if susfs else "false")
 
-    def test_there_is_no_fallback_left_to_a_second_source(self):
-        result = plan.resolve_manager("kernelsu-next", True, "")
-        self.assertEqual(result["MANAGER_SUSFS_FALLBACK_REPO"], "")
-        self.assertEqual(result["MANAGER_SUSFS_FALLBACK_REF"], "")
+    def test_there_is_no_fallback_to_a_second_source(self):
+        for name in ("none", "kernelsu-next"):
+            result = plan.resolve_manager(name, True, "")
+            self.assertFalse([key for key in result if "FALLBACK" in key], name)
+        self.assertNotIn("FALLBACK", BUILD)
+        self.assertNotIn("MANAGER_EFFECTIVE", BUILD)
 
     def test_a_manager_ref_override_still_wins(self):
         self.assertEqual(plan.resolve_manager("next", True, "abc123")["MANAGER_REF"], "abc123")

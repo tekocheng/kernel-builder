@@ -206,12 +206,8 @@ def resolve_manager(name: str, susfs: bool, manager_ref: str) -> dict[str, str]:
             "MANAGER_REPO": "",
             "MANAGER_REF": "",
             "MANAGER_SETUP": "",
-            "MANAGER_SUSFS_FALLBACK_REPO": "",
-            "MANAGER_SUSFS_FALLBACK_REF": "",
             "ENABLE_SUSFS": "false",
         }
-    if susfs and entry.get("susfs_blocked"):
-        die(f"{entry['display']} cannot be built with SUSFS: {entry['susfs_blocked']}")
     ref = require_single_line(manager_ref.strip(), "manager_ref")
     if not ref:
         ref = entry.get("susfs_ref") if susfs and entry.get("susfs_ref") else entry.get("ref", "")
@@ -224,8 +220,6 @@ def resolve_manager(name: str, susfs: bool, manager_ref: str) -> dict[str, str]:
         "MANAGER_REPO": entry.get("repo", ""),
         "MANAGER_REF": ref,
         "MANAGER_SETUP": entry.get("setup", ""),
-        "MANAGER_SUSFS_FALLBACK_REPO": entry.get("susfs_fallback_repo", "") if enabled == "true" else "",
-        "MANAGER_SUSFS_FALLBACK_REF": entry.get("susfs_fallback_ref", "") if enabled == "true" else "",
         "ENABLE_SUSFS": enabled,
     }
 
@@ -590,15 +584,6 @@ def emit_matrix(args: argparse.Namespace) -> None:
             if not picked_all:
                 print("::warning::Leaving 'none' out of the matrix: build_scope=image-menu needs a root manager", file=sys.stderr)
             managers.remove("none")
-    if truthy(getattr(args, "susfs", "true")):
-        for manager in list(managers):
-            reason = MANAGERS[manager].get("susfs_blocked")
-            if not reason:
-                continue
-            if not picked_all:
-                die(f"{MANAGERS[manager]['display']} cannot be built with SUSFS: {reason}")
-            print(f"::warning::Skipping {MANAGERS[manager]['display']} in this matrix: {reason}", file=sys.stderr)
-            managers.remove(manager)
     load_device(args.device)
     # Validate common build options once, before any matrix jobs are scheduled.
     for entry in selected_entries:
@@ -688,7 +673,6 @@ def build_parser() -> argparse.ArgumentParser:
     matrix.add_argument("--toolchain-sha256", default="")
     matrix.add_argument("--all-sources", default="false")
     matrix.add_argument("--build-scope", default="image-only")
-    matrix.add_argument("--susfs", default="true")
     matrix.add_argument("--github-output", default="")
     matrix.set_defaults(func=emit_matrix)
 
