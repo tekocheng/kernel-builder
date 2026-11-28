@@ -161,7 +161,7 @@ def validate() -> list[str]:
         require(actual == expected, f"Workflow choice '{input_name}' mismatch. Expected {expected}, found {actual}")
 
     # GitHub rejects a workflow_dispatch with more than 25 inputs, and the whole workflow then fails to load.
-    dispatch_inputs = re.search(r"(?ms)^on:\n  workflow_dispatch:\n    inputs:\n(.*?)^(?=\S)", advanced_workflow)
+    dispatch_inputs = re.search(r"(?ms)^on:\n  workflow_dispatch:\n    inputs:\n(.*?)^  workflow_call:", advanced_workflow)
     require(dispatch_inputs is not None, "Cannot find the workflow_dispatch inputs in build.yml")
     input_count = len(re.findall(r"(?m)^      [A-Za-z_][A-Za-z0-9_]*:\s*$", dispatch_inputs.group(1)))
     require(input_count <= 25, f"build.yml declares {input_count} workflow_dispatch inputs; GitHub allows at most 25")
