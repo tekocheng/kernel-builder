@@ -54,9 +54,9 @@ on:
         type: string
         default: ""
       manager:
-        description: "Managers to build. Use a comma-separated list or all; with image-menu, every built manager becomes an AK3 installer choice."
+        description: "Managers to build. Enter one manager or a comma-separated selection (e.g. kernelsu,kernelsu-next,sukisu-nova); use all only to build every compatible manager."
         type: string
-        default: all
+        default: kernelsu
       manager_ref:
         description: "Override the manager branch, tag, or commit"
         type: string
