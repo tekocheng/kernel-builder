@@ -250,8 +250,6 @@ jobs:
           TOOLCHAIN_SHA256: ${{ fromJSON(inputs.advanced_overrides || '{}').toolchain_sha256 || '' }}
         run: |
           printf '%s\\n%s\\n' "$TOOLCHAIN_URL" "$TOOLCHAIN_SHA256" > .toolchain-cache-key
-        run: |
-          printf '%s\n%s\n' "$TOOLCHAIN_URL" "$TOOLCHAIN_SHA256" > .toolchain-cache-key
 
       - name: Restore toolchain and ccache
         uses: actions/cache@v6
