@@ -67,7 +67,7 @@ The values below match the inputs declared in `.github/workflows/build.yml`.
 
 For `build_scope=image-only` and `full`, the selected manager checkboxes and `all_sources` expand into a matrix. If both are enabled, the workflow builds the Cartesian product of all configured sources and managers. There are currently seven sources and six manager entries (including `none`), so that combination schedules 42 build jobs, or 35 while `enable_susfs=true`, because KOWSU is skipped then.
 
-With `build_scope=image-menu`, the `none` manager is left out because the menu ZIP needs a manager to patch in, and `manager=none` stops with an error before any job starts. The matrix then has one job per source that carries the whole manager list (`manager=all` means every manager that can take SUSFS), instead of one job per manager.
+With `build_scope=image-menu`, the `none` manager is left out because the menu ZIP needs a manager to patch in, and `manager=none` stops with an error before any job starts. The matrix then has one job per source that carries the whole selected manager list, instead of one job per manager.
 
 Each matrix job has its own artifact named:
 
@@ -77,7 +77,7 @@ Each matrix job has its own artifact named:
 
 A draft release is created only when the complete build job/matrix succeeds. Its tag and title use the device and workflow run number, for example `marble-r123`. `max-parallel: 2` limits active matrix builds to two at a time; it does not reduce the total number of combinations.
 
-**Matrix-wide override warning:** `source_ref` is passed to every source in the matrix, and `manager_ref` is passed to every manager. When using `all_sources`, leave `source_ref` empty unless the same branch, tag, or commit is valid for every selected source. Likewise, when `manager=all`, leave `manager_ref` empty unless that ref exists and is appropriate in every manager repository. A single override is not independently selected for each matrix entry. The matrix planner emits a warning when a shared override is supplied across multiple sources or managers. It also warns if one `toolchain_sha256` is applied to `all_sources` while `toolchain=auto` selects different source-specific compilers.
+**Matrix-wide override warning:** `source_ref` is passed to every source in the matrix, and `manager_ref` is passed to every manager. When using `all_sources`, leave `source_ref` empty unless the same branch, tag, or commit is valid for every selected source. Likewise, when selecting multiple manager checkboxes, leave `manager_ref` empty unless that ref exists and is appropriate in every manager repository. A single override is not independently selected for each matrix entry. The matrix planner emits a warning when a shared override is supplied across multiple sources or managers. It also warns if one `toolchain_sha256` is applied to `all_sources` while `toolchain=auto` selects different source-specific compilers.
 
 ## Configured kernel sources
 
@@ -134,7 +134,7 @@ Manager definitions are stored in [`config/managers.json`](config/managers.json)
 | `kernelsu-next` | KernelSU-Next | [KernelSU-Next/KernelSU-Next](https://github.com/KernelSU-Next/KernelSU-Next), `dev` |
 | `sukisu-nova` | SukiSU Nova | [SukiSU-Nova/SukiSU-Nova](https://github.com/SukiSU-Nova/SukiSU-Nova), `main` |
 | `bakasu` | BakaSU | [Baka-SU/BakaSU](https://github.com/Baka-SU/BakaSU), `main` |
-| `kowsu` | KOWSU | [KOWX712/KernelSU](https://github.com/KOWX712/KernelSU), `master`. Builds without SUSFS only: the official SUSFS patch does not apply to this fork, so `enable_susfs=true` stops the run in the Plan job (and `manager=all` skips it with a warning). |
+| `kowsu` | KOWSU | [KOWX712/KernelSU](https://github.com/KOWX712/KernelSU), `master`. Builds without SUSFS only: the official SUSFS patch does not apply to this fork, so `enable_susfs=true` stops the run in the Plan job (and the matrix planner skips it with a warning when expanding all managers). |
 
 The builder fetches the configured manager's `setup` script and runs it in the kernel tree. Before setup, it removes stale KernelSU/KernelSU-Next directories or known in-tree locations so that a previously embedded manager does not silently replace the selected manager. It then checks that the expected manager Kconfig was created and that `CONFIG_KSU` remains enabled after `olddefconfig` (`y` or `m`).
 
@@ -332,7 +332,7 @@ Optional manager fields:
 - `aliases`: short names accepted in the `manager` input, lowercase letters, digits and dashes. They must not repeat another manager key or short name.
 - `susfs`: set to `true` only when the manager tree supports the required SUSFS integration.
 - `susfs_ref`: alternate manager ref used by default when SUSFS is enabled, unless `manager_ref` overrides it.
-- `susfs_blocked`: reason text. When set, `enable_susfs=true` is refused for this manager before any build starts, and `manager=all` leaves it out of the matrix with a warning.
+- `susfs_blocked`: reason text. When set, `enable_susfs=true` is refused for this manager before any build starts, and the matrix planner leaves it out when expanding all managers.
 - `susfs_fallback_repo` and `susfs_fallback_ref`: fallback manager source/ref used by the KernelSU-Next SUSFS path when the primary manager-side patch cannot be applied.
 
 There is no generic LKM build recipe or `lkm` manager flag in the current builder.
