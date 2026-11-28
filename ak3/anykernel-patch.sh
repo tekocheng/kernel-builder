@@ -91,6 +91,22 @@ pick_manager() {
   local key display sha_m sha_s;
 
   [ -f $AKHOME/bs_patches/managers.txt ] || return 1;
+
+  # Show the exact manager variants that were packaged into this ZIP. The list
+  # is generated from successfully built variants, not from the global config.
+  ui_print " ";
+  ui_print "Manager variants included in this ZIP:";
+  while IFS=';' read -r key display sha_m sha_s; do
+    [ -n "$key" ] || continue;
+    if [ "$sha_s" != "-" ]; then
+      ui_print " - $display (SUSFS available)";
+    else
+      ui_print " - $display";
+    fi;
+  done < $AKHOME/bs_patches/managers.txt;
+  ui_print " - Stock (no root manager) is used if all are skipped.";
+  ui_print "Vol- skips to the next manager; Vol+ selects the current manager.";
+
   while IFS=';' read -r key display sha_m sha_s; do
     [ -n "$key" ] || continue;
     [ -f $AKHOME/bs_patches/$key.p ] || continue;

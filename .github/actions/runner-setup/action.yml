@@ -1,0 +1,128 @@
+name: Runner setup
+description: Free runner disk space, configure swap, and report resources.
+inputs:
+  lto:
+    description: Selected LTO mode
+    required: true
+  build_scope:
+    description: Selected build scope
+    required: true
+  config:
+    description: Path to runner resource configuration JSON
+    required: false
+    default: config/runner.json
+
+runs:
+  using: composite
+  steps:
+    - name: Check runner disk space
+      id: disk-space
+      shell: bash
+      run: |
+        available_gib="$(df --output=avail -BG / | tail -n1 | tr -dc '0-9')"
+        echo "available_gib=${available_gib}" >> "$GITHUB_OUTPUT"
+        echo "Disk available before cleanup: ${available_gib} GiB"
+        df -h /
+
+    - name: Load runner resource configuration
+      id: config
+      shell: bash
+      env:
+        CONFIG_PATH: ${{ inputs.config }}
+      run: |
+        python3 - <<'PY'
+        import json, os
+        from pathlib import Path
+
+        path = Path(os.environ["CONFIG_PATH"])
+        cfg = json.loads(path.read_text())
+        required = ("disk_threshold_gib", "cleanup", "swap")
+        missing = [key for key in required if key not in cfg]
+        if missing:
+            raise SystemExit(f"Missing runner config keys: {', '.join(missing)}")
+
+        cleanup = cfg["cleanup"]
+        for mode in ("aggressive", "light"):
+            if mode not in cleanup:
+                raise SystemExit(f"Missing cleanup.{mode} configuration")
+
+        swap = cfg["swap"]
+        if int(swap.get("size_gb", 0)) < 0:
+            raise SystemExit("swap.size_gb must not be negative")
+        if not 0 <= int(swap.get("swappiness", 100)) <= 200:
+            raise SystemExit("swap.swappiness must be between 0 and 200")
+
+        with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+            output.write(f"disk_threshold_gib={int(cfg['disk_threshold_gib'])}\n")
+            output.write(f"swap_size_gb={int(swap['size_gb'])}\n")
+            output.write(f"swappiness={int(swap.get('swappiness', 100))}\n")
+            for mode in ("aggressive", "light"):
+                for key, value in cleanup[mode].items():
+                    if isinstance(value, bool):
+                        value = str(value).lower()
+                    output.write(f"{mode}_{key}={value}\n")
+        PY
+
+    - name: Free disk space (aggressive)
+      if: ${{ fromJSON(steps.disk-space.outputs.available_gib) < fromJSON(steps.config.outputs.disk_threshold_gib) || inputs.lto != 'none' || inputs.build_scope != 'image-only' }}
+      uses: endersonmenezes/free-disk-space@24d3e2af1fe79ccdde8844605337a8835e20d012
+      with:
+        remove_android: ${{ steps.config.outputs.aggressive_remove_android }}
+        remove_dotnet: ${{ steps.config.outputs.aggressive_remove_dotnet }}
+        remove_haskell: ${{ steps.config.outputs.aggressive_remove_haskell }}
+        remove_tool_cache: ${{ steps.config.outputs.aggressive_remove_tool_cache }}
+        remove_swap: ${{ steps.config.outputs.aggressive_remove_swap }}
+        remove_packages: ${{ steps.config.outputs.aggressive_remove_packages }}
+        remove_packages_one_command: ${{ steps.config.outputs.aggressive_remove_packages_one_command }}
+        remove_folders: ${{ steps.config.outputs.aggressive_remove_folders }}
+        rm_cmd: ${{ steps.config.outputs.aggressive_rm_cmd }}
+        rmz_version: ${{ steps.config.outputs.aggressive_rmz_version }}
+        testing: ${{ steps.config.outputs.aggressive_testing }}
+
+    - name: Free disk space (light)
+      if: ${{ fromJSON(steps.disk-space.outputs.available_gib) >= fromJSON(steps.config.outputs.disk_threshold_gib) && inputs.lto == 'none' && inputs.build_scope == 'image-only' }}
+      uses: endersonmenezes/free-disk-space@24d3e2af1fe79ccdde8844605337a8835e20d012
+      with:
+        remove_android: ${{ steps.config.outputs.light_remove_android }}
+        remove_dotnet: ${{ steps.config.outputs.light_remove_dotnet }}
+        remove_haskell: ${{ steps.config.outputs.light_remove_haskell }}
+        remove_tool_cache: ${{ steps.config.outputs.light_remove_tool_cache }}
+        remove_swap: ${{ steps.config.outputs.light_remove_swap }}
+        rm_cmd: ${{ steps.config.outputs.light_rm_cmd }}
+        rmz_version: ${{ steps.config.outputs.light_rmz_version }}
+        testing: ${{ steps.config.outputs.light_testing }}
+
+    - name: Set swap space
+      if: ${{ inputs.lto != 'none' }}
+      uses: pierotofy/set-swap-space@fc79b3f67fa8a838184ce84a674ca12238d2c761
+      with:
+        swap-size-gb: ${{ steps.config.outputs.swap_size_gb }}
+
+    - name: Increase memory swap usage
+      if: ${{ inputs.lto != 'none' }}
+      shell: bash
+      env:
+        SWAPPINESS: ${{ steps.config.outputs.swappiness }}
+      run: sudo sysctl -w vm.swappiness="$SWAPPINESS"
+
+    - name: Report runner resources
+      shell: bash
+      env:
+        DISK_BEFORE_GIB: ${{ steps.disk-space.outputs.available_gib }}
+      run: |
+        {
+          echo "### Runner resources"
+          echo "Disk available before cleanup: ${DISK_BEFORE_GIB} GiB"
+          echo '---'
+          echo '### Configured resource profile'
+          echo "Disk cleanup threshold: ${{ steps.config.outputs.disk_threshold_gib }} GiB"
+          echo "Swap configured: ${{ inputs.lto != 'none' && steps.config.outputs.swap_size_gb || 0 }} GiB"
+          echo "Swappiness: ${{ steps.config.outputs.swappiness }}"
+          echo '---'
+          echo '### Actual runner resources'
+          echo '```'
+          df -h / /mnt 2>&1 || true
+          free -h
+          swapon --show
+          echo '```'
+        } | tee -a "$GITHUB_STEP_SUMMARY"
