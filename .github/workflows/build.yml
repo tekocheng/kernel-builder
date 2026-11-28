@@ -95,6 +95,7 @@ jobs:
   build:
     name: Build (simple options)
     uses: ./.github/workflows/build-advanced.yml
+    secrets: inherit
     with:
       device: ${{ inputs.device }}
       kernel_name: ""
