@@ -635,6 +635,11 @@ make_kernel() {
   log "uname suffix: ${scm:-none}"
   if [[ "${MANAGER}" != "none" ]]; then
     ( cd "${KERNEL_DIR}" && "${cfg[@]}" -e KSU )
+  else
+    # Manager Kconfig can be present without a manager (image-menu bootstraps it for the stock variant).
+    # Upstream declares "config KSU ... default y", so olddefconfig would switch it on by itself and
+    # compile drivers/kernelsu into the stock Image. Write the choice down explicitly.
+    ( cd "${KERNEL_DIR}" && "${cfg[@]}" -d KSU ) || true
   fi
   if [[ "${ENABLE_SUSFS}" == "true" ]]; then
     ( cd "${KERNEL_DIR}" && "${cfg[@]}" -e KSU_SUSFS )
@@ -665,6 +670,9 @@ make_kernel() {
   make -C "${KERNEL_DIR}" "${common[@]}" olddefconfig
   if [[ "${MANAGER}" != "none" ]] && ! grep -Eq '^(CONFIG_KSU=y|CONFIG_KSU=m)$' "${out}/.config"; then
     die "CONFIG_KSU did not stay enabled"
+  fi
+  if [[ "${MANAGER}" == "none" ]] && grep -Eq '^(CONFIG_KSU=y|CONFIG_KSU=m)$' "${out}/.config"; then
+    die "CONFIG_KSU is enabled in a build without a manager; the stock Image would contain KernelSU"
   fi
   if [[ "${ENABLE_SUSFS}" == "true" ]] && ! grep -q '^CONFIG_KSU_SUSFS=y$' "${out}/.config"; then
     die "CONFIG_KSU_SUSFS did not stay enabled"
