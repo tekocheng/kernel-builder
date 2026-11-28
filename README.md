@@ -4,7 +4,7 @@ A configurable GitHub Actions builder for Android kernels. The current configura
 
 Kernel sources, root managers, toolchains, and device-specific values are kept in `config/`. The workflow is the entry point; the scripts resolve those configuration files and build each requested source/manager combination.
 
-> **Current scope:** the workflow currently exposes one device (`marble`) and four predefined kernel sources. The configuration is structured so more devices and sources can be added, but adding a device also requires updating the workflow's device dropdown and checking its AnyKernel3 installer settings.
+> **Current scope:** the simple workflow exposes the `marble` device and the predefined kernel sources. The advanced workflow also supports custom Git/manifest sources and one-run overrides. Adding a device still requires updating the workflow dropdowns and checking its AnyKernel3 installer settings.
 
 ## What the workflow produces
 
@@ -20,8 +20,8 @@ The AnyKernel3 installer has `do.modules=0`, so the flashable ZIP installs the k
 ## Run a build
 
 1. Push or fork this repository to GitHub.
-2. Open **Actions** → **Build Kernel** → **Run workflow**.
-3. Choose the device, source, manager, and build options described below.
+2. Open **Actions** → **Build Kernel** → **Run workflow** for the recommended compact menu. Use **Build Kernel Advanced** when you need custom repositories, refs, custom kernel paths, all-sources builds, manager refs, or compiler/SUSFS/NoMount overrides.
+3. In the simple workflow, choose the device, source, manager checkboxes, and build options.
 4. Open the completed workflow run and download the artifact for the desired source/manager pair.
 5. Check `build-info.txt` and the ZIP name before flashing. Only flash a build that matches the device and ROM/kernel base it was built for.
 
@@ -29,13 +29,21 @@ The build job runs on `ubuntu-24.04`, has a 300-minute timeout, frees some prein
 
 Runner disk cleanup and swap setup are implemented in the reusable composite action at `.github/actions/runner-setup/action.yml`. Its policy is configured in `config/runner.json` (40 GiB disk threshold, aggressive/light cleanup profiles, 16 GiB swap for LTO builds, and swappiness 100). The workflow calls this action in the same build job, so cleanup and swap apply to the actual kernel build runner. No additional `workflow_dispatch` inputs are required.
 
+### Simple workflow inputs
+
+`Build Kernel` intentionally exposes only 13 inputs: device, kernel source, five manager checkboxes, SUSFS, NoMount, toolchain, LTO, build scope, and draft release. Compiler cache and uname suffixes use their safe defaults automatically. At least one manager checkbox must be selected.
+
+### Advanced workflow
+
+Use `Build Kernel Advanced` for `kernel_name`, `all_sources`, source and manager refs, custom Git/manifest source fields, and the `advanced_overrides` JSON field. The advanced workflow retains the full set of controls while sharing the same build implementation as the simple workflow.
+
 ### Recommended first build
 
 The workflow defaults to a combined AK3 manager menu for one source: `kernel_source=aospa`, official KernelSU selected, `enable_susfs=true`, `enable_nomount=false`, `toolchain=auto`, `lto=thin`, `build_scope=image-menu`, and `ccache=true`. In the Run workflow form, tick one or more manager checkboxes: `build_kernelsu`, `build_kernelsu_next`, `build_sukisu_nova`, `build_kowsu`, and `build_bakasu`. At least one must be selected. The ZIP contains the stock kernel plus the selected variants that the plan allows and the build successfully produces. With SUSFS enabled, KOWSU is rejected because its SUSFS patch is incompatible; set `enable_susfs=false` to build KOWSU without SUSFS. Leave `source_ref` and `manager_ref` empty to use configured presets. Advanced one-run overrides (`susfs_ref`, `susfs_branch`, `nomount_ref`, `toolchain_url`, and `toolchain_sha256`) are supplied as a JSON object in `advanced_overrides`. Select a source that matches the ROM/kernel base on the target device.
 
 ## Workflow inputs
 
-The values below match the inputs declared in `.github/workflows/build.yml`.
+The values below match the inputs declared in `.github/workflows/build-advanced.yml`.
 
 | Input | Available values / default | Description |
 |---|---|---|
@@ -325,7 +333,7 @@ For a custom Git source, `source_ref` takes precedence over `custom_ref` when bo
 
 ## Add a manager
 
-Add an entry to [`config/managers.json`](config/managers.json). The workflow currently exposes five manager checkboxes. When adding a manager, add its checkbox to `.github/workflows/build.yml` and map it in the Plan job's normalization step; keep the total number of `workflow_dispatch` inputs at or below GitHub's limit of 25. The resolver expects a `display`, `repo`, `ref`, and `setup` value. The setup script must create a Kconfig at one of the paths checked by `scripts/build.sh` (`KernelSU/kernel/Kconfig` or `KernelSU-Next/kernel/Kconfig`).
+Add an entry to [`config/managers.json`](config/managers.json). The workflow currently exposes five manager checkboxes. When adding a manager, add its checkbox to both workflow entry points if it should appear in the simple menu, and map it in the Plan job's normalization step in `.github/workflows/build-advanced.yml`. Keep each `workflow_dispatch` workflow at or below GitHub's 25-input limit. The resolver expects a `display`, `repo`, `ref`, and `setup` value. The setup script must create a Kconfig at one of the paths checked by `scripts/build.sh` (`KernelSU/kernel/Kconfig` or `KernelSU-Next/kernel/Kconfig`).
 
 Optional manager fields:
 
@@ -341,7 +349,7 @@ There is no generic LKM build recipe or `lkm` manager flag in the current builde
 
 For a one-run override, paste an HTTPS URL to a `.tar.gz` or `.tar.xz` compiler archive into `toolchain_url`. The archive must contain `bin/clang` where the builder can locate it.
 
-To add a reusable named toolchain, add an entry to [`config/toolchains.json`](config/toolchains.json) and add its key to the `toolchain` options in `.github/workflows/build.yml`:
+To add a reusable named toolchain, add an entry to [`config/toolchains.json`](config/toolchains.json) and add its key to the `toolchain` options in `.github/workflows/build.yml` and `.github/workflows/build-advanced.yml` (the simple menu only lists supported named toolchains):
 
 ```json
 "llvm-24.1.0": {
